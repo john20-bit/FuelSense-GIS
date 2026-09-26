@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: fuelsense-prod-limits
+  namespace: fuelsense-prod
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "2"
+        memory: 2Gi
+      defaultRequest:
+        cpu: "500m"
+        memory: 512Mi
+      max:
+        cpu: "8"
+        memory: 8Gi

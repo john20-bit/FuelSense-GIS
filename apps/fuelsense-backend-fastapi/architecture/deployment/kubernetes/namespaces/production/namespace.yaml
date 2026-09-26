@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fuelsense-prod
+  labels:
+    app.kubernetes.io/name: fuelsense-gis
+    environment: production

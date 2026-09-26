@@ -1,0 +1,20 @@
+name: FuelSense GIS Docker
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build Backend Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        working-directory: apps/fuelsense-backend-fastapi
+        run: |
+          docker build -t fuelsense/backend:${{ github.sha }} .

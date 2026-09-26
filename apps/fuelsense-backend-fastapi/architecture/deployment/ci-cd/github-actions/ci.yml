@@ -1,0 +1,63 @@
+name: FuelSense GIS CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  validate:
+    name: Validate Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: apps/fuelsense-backend-fastapi
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Run tests
+        working-directory: apps/fuelsense-backend-fastapi
+        run: |
+          if [ -d tests ]; then
+            pytest -q
+          else
+            echo "No tests directory found"
+          fi
+
+      - name: Validate Kubernetes YAML
+        run: |
+          python - <<'PY'
+          import pathlib
+          import yaml
+
+          root = pathlib.Path(
+              "apps/fuelsense-backend-fastapi/architecture/deployment/kubernetes"
+          )
+
+          files = list(root.rglob("*.yaml")) + list(root.rglob("*.yml"))
+
+          for file in files:
+              with file.open() as f:
+                  list(yaml.safe_load_all(f))
+              print(f"OK: {file}")
+
+          print(f"Validated {len(files)} Kubernetes YAML files")
+          PY

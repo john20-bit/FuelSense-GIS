@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fuelsense-kafka
+  labels:
+    app: fuelsense-kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fuelsense-kafka
+  template:
+    metadata:
+      labels:
+        app: fuelsense-kafka
+    spec:
+      containers:
+        - name: kafka
+          image: apache/kafka:latest
+          ports:
+            - containerPort: 9092
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"

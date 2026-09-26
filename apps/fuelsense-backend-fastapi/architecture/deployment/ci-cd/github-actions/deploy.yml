@@ -1,0 +1,33 @@
+name: FuelSense GIS Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+jobs:
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Validate Kubernetes manifests
+        run: |
+          kubectl apply \
+            --dry-run=client \
+            -f apps/fuelsense-backend-fastapi/architecture/deployment/kubernetes/
