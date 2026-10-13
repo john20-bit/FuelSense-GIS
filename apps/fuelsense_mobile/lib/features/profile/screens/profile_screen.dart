@@ -140,16 +140,6 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 10),
 
-                  _ActionTile(
-                    icon: Icons.local_gas_station_rounded,
-                    title: 'Fuel network',
-                    subtitle: 'Petrol, diesel and ethanol',
-                    color: const Color(0xFFFFC857),
-                    onTap: () => context.push('/energy-network'),
-                  ),
-
-                  const SizedBox(height: 22),
-
                   Text(
                     'INTELLIGENCE',
                     style: AppTextStyles.labelTechnical.copyWith(
@@ -157,15 +147,6 @@ class ProfileScreen extends ConsumerWidget {
                       fontSize: 8,
                       letterSpacing: 1.2,
                     ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  _ActionTile(
-                    icon: Icons.route_rounded,
-                    title: 'Route optimization',
-                    subtitle: 'Plan fuel-aware journeys',
-                    color: const Color(0xFF9A8BFF),
-                    onTap: () => context.push('/route-optimization'),
                   ),
                   const SizedBox(height: 10),
 

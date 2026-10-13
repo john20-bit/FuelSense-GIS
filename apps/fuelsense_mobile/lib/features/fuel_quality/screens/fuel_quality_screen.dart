@@ -7,6 +7,7 @@ import '../../../shared/models/vehicle.dart';
 import '../../vehicle/providers/vehicle_provider.dart';
 import '../models/phase_separation_assessment.dart';
 import '../providers/phase_separation_provider.dart';
+import '../../telemetry/screens/telemetry_screen.dart';
 
 class FuelQualityScreen extends ConsumerStatefulWidget {
   const FuelQualityScreen({super.key});
@@ -17,6 +18,7 @@ class FuelQualityScreen extends ConsumerStatefulWidget {
 
 class _FuelQualityScreenState extends ConsumerState<FuelQualityScreen> {
   Vehicle? _selectedVehicle;
+  int _selectedModule = 0;
 
   void _selectVehicle(Vehicle vehicle) {
     setState(() {
@@ -41,39 +43,110 @@ class _FuelQualityScreenState extends ConsumerState<FuelQualityScreen> {
               ),
             ),
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
               sliver: SliverToBoxAdapter(
-                child: vehiclesAsync.when(
-                  loading: () => const _LoadingCard(),
-                  error: (error, _) => _ErrorCard(message: error.toString()),
-                  data: (vehicles) {
-                    if (vehicles.isEmpty) {
-                      return const _EmptyCard();
-                    }
-
-                    final selected = _selectedVehicle;
-
-                    if (selected == null) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted && _selectedVehicle == null) {
-                          _selectVehicle(vehicles.first);
-                        }
-                      });
-                    }
-
-                    final activeVehicle = selected ?? vehicles.first;
-
-                    return _AssessmentSection(
-                      vehicles: vehicles,
-                      selectedVehicle: activeVehicle,
-                      onVehicleChanged: _selectVehicle,
-                    );
-                  },
+                child: _ModuleSwitcher(
+                  selectedIndex: _selectedModule,
+                  onChanged: (index) => setState(() => _selectedModule = index),
                 ),
               ),
             ),
+            if (_selectedModule == 1)
+              const SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: 18),
+                sliver: SliverToBoxAdapter(child: TelemetryScreen()),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                sliver: SliverToBoxAdapter(
+                  child: vehiclesAsync.when(
+                    loading: () => const _LoadingCard(),
+                    error: (error, _) => _ErrorCard(message: error.toString()),
+                    data: (vehicles) {
+                      if (vehicles.isEmpty) {
+                        return const _EmptyCard();
+                      }
+
+                      final selected = _selectedVehicle;
+
+                      if (selected == null) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted && _selectedVehicle == null) {
+                            _selectVehicle(vehicles.first);
+                          }
+                        });
+                      }
+
+                      final activeVehicle = selected ?? vehicles.first;
+
+                      return _AssessmentSection(
+                        vehicles: vehicles,
+                        selectedVehicle: activeVehicle,
+                        onVehicleChanged: _selectVehicle,
+                      );
+                    },
+                  ),
+                ),
+              ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ModuleSwitcher extends StatelessWidget {
+  const _ModuleSwitcher({required this.selectedIndex, required this.onChanged});
+
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['Phase Separation', 'Telemetry'];
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101D27),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF263944)),
+      ),
+      child: Row(
+        children: List.generate(labels.length, (index) {
+          final selected = selectedIndex == index;
+          return Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => onChanged(index),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 13,
+                  horizontal: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? const Color(0xFF1D3540)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  labels[index],
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: selected
+                        ? const Color(0xFF52E3D0)
+                        : const Color(0xFF9BAEB8),
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }

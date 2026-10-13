@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design/app_theme_extension.dart';
 import '../../../features/news/widgets/news_feed.dart';
-import '../../../features/fuel_prices/providers/daily_fuel_price_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = context.fuelTheme;
 
     return Scaffold(
@@ -131,7 +130,7 @@ class _CommandHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'SPATIAL DATA',
+          'FUEL OVERVIEW',
           style: TextStyle(
             color: theme.accent,
             fontSize: 10,
@@ -143,7 +142,7 @@ class _CommandHeader extends StatelessWidget {
         const SizedBox(height: 7),
 
         Text(
-          'Your fuel network,\non the map.',
+          'Your fuel updates,\nin one place.',
           style: TextStyle(
             color: theme.textPrimary,
             fontSize: 30,
@@ -156,7 +155,7 @@ class _CommandHeader extends StatelessWidget {
         const SizedBox(height: 9),
 
         Text(
-          'Fuel network • Spatial mapping • News',
+          'News • Daily fuel prices • Station updates',
           style: TextStyle(color: theme.textSecondary, fontSize: 12),
         ),
       ],
@@ -165,18 +164,23 @@ class _CommandHeader extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------------------
-// LIVE GIS MAP
+// DAILY FUEL PRICES
 // -----------------------------------------------------------------------------
 
-class _DailyFuelPrices extends ConsumerWidget {
+class _DailyFuelPrices extends StatelessWidget {
   const _DailyFuelPrices();
 
-  static const String city = 'Madurai';
+  static final Uri _officialPricesUri = Uri.parse(
+    'https://iocl.com/petrol-diesel-price',
+  );
+
+  Future<void> _openOfficialPrices() async {
+    await launchUrl(_officialPricesUri, mode: LaunchMode.externalApplication);
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = context.fuelTheme;
-    final prices = ref.watch(dailyFuelPricesProvider(city));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,7 +196,7 @@ class _DailyFuelPrices extends ConsumerWidget {
         ),
         const SizedBox(height: 5),
         Text(
-          'Know the rate before you refuel.',
+          'Check the latest rates before you refuel.',
           style: TextStyle(
             color: theme.textPrimary,
             fontSize: 19,
@@ -201,96 +205,29 @@ class _DailyFuelPrices extends ConsumerWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '$city · ₹ per litre',
+          'Prices are not currently verified in FuelSense.',
           style: TextStyle(color: theme.textMuted, fontSize: 11),
         ),
         const SizedBox(height: 14),
-        prices.when(
-          loading: () => const Row(
-            children: [
-              Expanded(
-                child: _FuelPriceCard(title: 'PETROL', value: 'Loading...'),
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: _FuelPriceCard(title: 'DIESEL', value: 'Loading...'),
-              ),
-            ],
+        const Row(
+          children: [
+            Expanded(
+              child: _FuelPriceCard(title: 'PETROL', value: 'Unavailable'),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: _FuelPriceCard(title: 'DIESEL', value: 'Unavailable'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _openOfficialPrices,
+            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+            label: const Text('Check IndianOil official prices'),
           ),
-          error: (error, stack) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Expanded(
-                    child: _FuelPriceCard(
-                      title: 'PETROL',
-                      value: 'Unavailable',
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: _FuelPriceCard(
-                      title: 'DIESEL',
-                      value: 'Unavailable',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Verified prices could not be loaded. Please try again later.',
-                style: TextStyle(color: theme.textMuted, fontSize: 10),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () =>
-                      ref.invalidate(dailyFuelPricesProvider(city)),
-                  icon: const Icon(Icons.refresh_rounded, size: 15),
-                  label: const Text('Retry'),
-                ),
-              ),
-            ],
-          ),
-          data: (data) {
-            final updated = data.updatedAt;
-            final updatedLabel = updated == null
-                ? 'Update time not supplied by provider'
-                : 'Updated ${updated.toLocal().toString().substring(0, 16)}';
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _FuelPriceCard(
-                        title: 'PETROL',
-                        value: '₹${data.petrol.toStringAsFixed(2)}',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _FuelPriceCard(
-                        title: 'DIESEL',
-                        value: '₹${data.diesel.toStringAsFixed(2)}',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '$updatedLabel · Source: ${data.source}',
-                  style: TextStyle(
-                    color: theme.textMuted,
-                    fontSize: 10,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            );
-          },
         ),
       ],
     );

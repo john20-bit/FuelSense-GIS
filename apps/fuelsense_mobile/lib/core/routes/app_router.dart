@@ -8,18 +8,14 @@ import '../../features/onboarding/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/fuel/screens/nearby_fuel_screen.dart';
-import '../../features/fuel/screens/energy_network_screen.dart';
 import '../../features/fuel/screens/station_details_screen.dart';
 import '../../features/spatial/screens/spatial_mapping_screen.dart';
 import '../../features/fuel_quality/screens/fuel_quality_screen.dart';
-import '../../features/route/screens/route_optimization_screen.dart';
 import '../../features/fuel/screens/energy_history_screen.dart';
 import '../../features/fuel/models/fuel_station_model.dart';
 import '../../features/map/screens/map_screen.dart';
 import '../../shared/models/vehicle.dart';
-import '../../shared/models/vehicle_catalog.dart';
 import '../../features/vehicle/screens/vehicle_setup_screen.dart';
-import '../../features/vehicle/screens/vehicle_guidance_screen.dart';
 import '../../features/vehicle/screens/vehicle_details_screen.dart';
 import '../../features/garage/presentation/garage_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
@@ -46,16 +42,6 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/vehicle-guidance',
-      builder: (context, state) {
-        final catalog = state.extra;
-        if (catalog is! VehicleCatalog) {
-          return const VehicleSetupScreen();
-        }
-        return VehicleGuidanceScreen(catalog: catalog);
-      },
-    ),
-    GoRoute(
       path: '/vehicle-details',
       builder: (context, state) {
         final vehicle = state.extra;
@@ -72,17 +58,8 @@ final appRouter = GoRouter(
       builder: (context, state) => const NearbyFuelScreen(),
     ),
     GoRoute(
-      path: '/energy-network',
-      builder: (context, state) => const EnergyNetworkScreen(),
-    ),
-
-    GoRoute(
       path: '/energy-history',
       builder: (context, state) => const EnergyHistoryScreen(),
-    ),
-    GoRoute(
-      path: '/route-optimization',
-      builder: (context, state) => const RouteOptimizationScreen(),
     ),
     GoRoute(
       path: '/fuel-quality',

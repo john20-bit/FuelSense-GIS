@@ -87,11 +87,6 @@ class GarageScreen extends ConsumerWidget {
                               onAdd: () => context.push('/vehicle-setup'),
                             ),
                             const SizedBox(height: 26),
-                            _GarageOverview(vehicleCount: vehicles.length),
-                            const SizedBox(height: 14),
-                            _FuelQualityActionCard(
-                              onTap: () => context.push('/fuel-quality'),
-                            ),
                             const SizedBox(height: 18),
                             ...vehicles.asMap().entries.map(
                               (entry) => Padding(
@@ -232,165 +227,9 @@ class _AddVehicleButton extends StatelessWidget {
 // OVERVIEW
 // -----------------------------------------------------------------------------
 
-class _GarageOverview extends StatelessWidget {
-  const _GarageOverview({required this.vehicleCount});
-
-  final int vehicleCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.fuelTheme;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.surface.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: theme.border.withValues(alpha: 0.8)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: theme.accentSecondary.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(
-              Icons.radar_rounded,
-              color: theme.accentSecondary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'VEHICLE MONITORING',
-                  style: AppTextStyles.labelTechnical.copyWith(
-                    color: theme.textMuted,
-                    fontSize: 8,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'Energy telemetry is ready',
-                  style: AppTextStyles.body.copyWith(
-                    color: theme.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            'ONLINE',
-            style: AppTextStyles.labelTechnical.copyWith(
-              color: theme.success,
-              fontSize: 8,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // -----------------------------------------------------------------------------
 // FUEL QUALITY ACTION
 // -----------------------------------------------------------------------------
-
-class _FuelQualityActionCard extends StatelessWidget {
-  const _FuelQualityActionCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.fuelTheme;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: Ink(
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: theme.surface.withValues(alpha: 0.88),
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(
-              color: theme.accentSecondary.withValues(alpha: 0.28),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: theme.accentSecondary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(
-                    color: theme.accentSecondary.withValues(alpha: 0.18),
-                  ),
-                ),
-                child: Icon(
-                  Icons.water_drop_outlined,
-                  color: theme.accentSecondary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'FUEL QUALITY',
-                      style: AppTextStyles.labelTechnical.copyWith(
-                        color: theme.accentSecondary,
-                        fontSize: 8,
-                        letterSpacing: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Phase separation assessment',
-                      style: AppTextStyles.body.copyWith(
-                        color: theme.textPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Screen storage and blend-related fuel risk.',
-                      style: AppTextStyles.bodySecondary.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.arrow_forward_rounded,
-                color: theme.accentSecondary,
-                size: 19,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // -----------------------------------------------------------------------------
 // VEHICLE COMMAND CARD
@@ -421,8 +260,6 @@ class _VehicleCommandCard extends ConsumerWidget {
     return Icons.directions_car_rounded;
   }
 
-  String get _energyLabel => 'FUEL LEVEL';
-
   String get _typeLabel {
     if (_isHybrid) return 'HYBRID';
 
@@ -431,12 +268,6 @@ class _VehicleCommandCard extends ConsumerWidget {
 
     return normalized.toUpperCase();
   }
-
-  String get _primaryMetric => vehicle.tankCapacity > 0
-      ? '${vehicle.tankCapacity.toStringAsFixed(0)} L'
-      : '--';
-
-  String get _primaryLabel => 'TANK';
 
   Future<void> _deleteVehicle(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
@@ -514,7 +345,6 @@ class _VehicleCommandCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = context.fuelTheme;
     final accent = _accent(context);
-    final percentage = vehicle.fuelPercentage.clamp(0.0, 100.0);
 
     return Material(
       color: Colors.transparent,
@@ -522,341 +352,85 @@ class _VehicleCommandCard extends ConsumerWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         child: Ink(
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: theme.surfaceElevated,
             borderRadius: BorderRadius.circular(AppRadius.xl),
             border: Border.all(
               color: theme.borderStrong.withValues(alpha: 0.72),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.13),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
-              ),
-            ],
           ),
-          child: Column(
+          child: Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        _VehicleIcon(icon: _icon, accent: accent),
-                        const SizedBox(width: 13),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                vehicle.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.title.copyWith(
-                                  color: theme.textPrimary,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                vehicle.registrationNumber.isEmpty
-                                    ? 'Vehicle connected'
-                                    : vehicle.registrationNumber,
-                                style: AppTextStyles.bodySecondary.copyWith(
-                                  color: theme.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        _EnergyTypeBadge(label: _typeLabel, accent: accent),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    _EnergyGauge(
-                      label: _energyLabel,
-                      percentage: percentage,
-                      accent: accent,
-                    ),
-                  ],
-                ),
-              ),
-              Container(height: 1, color: theme.border.withValues(alpha: 0.72)),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 14, 10, 15),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _TelemetryItem(
-                        icon: Icons.speed_rounded,
-                        label: 'MILEAGE',
-                        value: vehicle.efficiencyLabel,
-                        accent: accent,
-                      ),
-                    ),
-                    _TelemetryDivider(),
-                    Expanded(
-                      child: _TelemetryItem(
-                        icon: Icons.local_gas_station_rounded,
-                        label: _primaryLabel,
-                        value: _primaryMetric,
-                        accent: accent,
-                      ),
-                    ),
-                    _TelemetryDivider(),
-                    Expanded(
-                      child: _TelemetryItem(
-                        icon: Icons.route_rounded,
-                        label: 'STATUS',
-                        value: 'READY',
-                        accent: theme.success,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               Container(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 13),
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: theme.surface.withValues(alpha: 0.48),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(AppRadius.xl),
-                  ),
+                  color: accent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
-                child: Row(
+                child: Icon(_icon, color: accent, size: 22),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'OPEN INTELLIGENCE',
-                      style: AppTextStyles.labelTechnical.copyWith(
-                        color: theme.textMuted,
-                        fontSize: 8,
-                        letterSpacing: 1.15,
+                      vehicle.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.title.copyWith(
+                        color: theme.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: 'Delete vehicle',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 36,
-                        minHeight: 36,
-                      ),
-                      onPressed: () => _deleteVehicle(context, ref),
-                      icon: Icon(
-                        Icons.delete_outline_rounded,
-                        color: theme.textMuted,
-                        size: 19,
+                    const SizedBox(height: 5),
+                    Text(
+                      vehicle.registrationNumber.isEmpty
+                          ? 'Registration not added'
+                          : vehicle.registrationNumber,
+                      style: AppTextStyles.bodySecondary.copyWith(
+                        color: theme.textSecondary,
+                        fontSize: 12,
                       ),
                     ),
-                    const SizedBox(width: 3),
-                    Icon(Icons.arrow_forward_rounded, color: accent, size: 17),
+                    const SizedBox(height: 9),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      child: Text(
+                        _typeLabel,
+                        style: AppTextStyles.labelTechnical.copyWith(
+                          color: accent,
+                          fontSize: 9,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// VEHICLE ICON
-// -----------------------------------------------------------------------------
-
-class _VehicleIcon extends StatelessWidget {
-  const _VehicleIcon({required this.icon, required this.accent});
-
-  final IconData icon;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: accent.withValues(alpha: 0.18)),
-      ),
-      child: Icon(icon, color: accent, size: 27),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// ENERGY TYPE
-// -----------------------------------------------------------------------------
-
-class _EnergyTypeBadge extends StatelessWidget {
-  const _EnergyTypeBadge({required this.label, required this.accent});
-
-  final String label;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: accent.withValues(alpha: 0.20)),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelTechnical.copyWith(
-          color: accent,
-          fontSize: 7.5,
-          letterSpacing: 0.85,
-        ),
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// ENERGY GAUGE
-// -----------------------------------------------------------------------------
-
-class _EnergyGauge extends StatelessWidget {
-  const _EnergyGauge({
-    required this.label,
-    required this.percentage,
-    required this.accent,
-  });
-
-  final String label;
-  final double percentage;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.fuelTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: AppTextStyles.statLabel.copyWith(
-                color: theme.textMuted,
-                letterSpacing: 1,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              '${percentage.toStringAsFixed(0)}%',
-              style: AppTextStyles.dataValue.copyWith(
-                color: accent,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(99),
-          child: Stack(
-            children: [
-              Container(
-                height: 9,
-                width: double.infinity,
-                color: theme.surfaceInteractive,
-              ),
-              FractionallySizedBox(
-                widthFactor: percentage / 100,
-                child: Container(
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
+              IconButton(
+                tooltip: 'Delete vehicle',
+                onPressed: () => _deleteVehicle(context, ref),
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  color: theme.textMuted,
                 ),
               ),
+              Icon(Icons.chevron_right_rounded, color: theme.textMuted),
             ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// TELEMETRY
-// -----------------------------------------------------------------------------
-
-class _TelemetryItem extends StatelessWidget {
-  const _TelemetryItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.fuelTheme;
-
-    return Column(
-      children: [
-        Icon(icon, color: accent, size: 18),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.statLabel.copyWith(
-            color: theme.textMuted,
-            fontSize: 7.5,
-            letterSpacing: 0.65,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          value,
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.body.copyWith(
-            color: theme.textPrimary,
-            fontWeight: FontWeight.w800,
-            fontSize: 12,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TelemetryDivider extends StatelessWidget {
-  const _TelemetryDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.fuelTheme;
-
-    return Container(
-      width: 1,
-      height: 42,
-      color: theme.border.withValues(alpha: 0.7),
+      ),
     );
   }
 }
@@ -909,14 +483,14 @@ class _EmptyGarage extends StatelessWidget {
                     ),
                   ),
                   child: Icon(
-                    Icons.garage_rounded,
+                    Icons.directions_car_rounded,
                     color: theme.accent,
                     size: 38,
                   ),
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Your garage is empty',
+                  'No vehicles added yet',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.heading.copyWith(
                     color: theme.textPrimary,
