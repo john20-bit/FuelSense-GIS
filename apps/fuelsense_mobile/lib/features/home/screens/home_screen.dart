@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/design/app_theme_extension.dart';
-import '../../../core/design/design_tokens.dart';
-import '../../../features/fuel/providers/fuel_station_provider.dart';
 import '../../../features/news/widgets/news_feed.dart';
+import '../../../features/fuel_prices/providers/daily_fuel_price_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -13,7 +11,6 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = context.fuelTheme;
-    final stationsAsync = ref.watch(fuelStationsProvider);
 
     return Scaffold(
       backgroundColor: theme.background,
@@ -30,11 +27,8 @@ class HomeScreen extends ConsumerWidget {
                   const _CommandHeader(),
                   const SizedBox(height: 20),
                   const NewsFeed(),
-                  const SizedBox(height: 24),
-                  _LiveMapCard(
-                    stationsAsync: stationsAsync,
-                    onTap: () => _tryNavigate(context, '/spatial-mapping'),
-                  ),
+                  const SizedBox(height: 26),
+                  const _DailyFuelPrices(),
                   const SizedBox(height: 24),
                   const _Footer(),
                 ]),
@@ -44,14 +38,6 @@ class HomeScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  static void _tryNavigate(BuildContext context, String route) {
-    try {
-      context.push(route);
-    } catch (_) {
-      // Keep Home stable if a destination route is not registered.
-    }
   }
 }
 
@@ -182,240 +168,184 @@ class _CommandHeader extends StatelessWidget {
 // LIVE GIS MAP
 // -----------------------------------------------------------------------------
 
-class _LiveMapCard extends StatelessWidget {
-  final AsyncValue<List<dynamic>> stationsAsync;
-  final VoidCallback onTap;
+class _DailyFuelPrices extends ConsumerWidget {
+  const _DailyFuelPrices();
 
-  const _LiveMapCard({required this.stationsAsync, required this.onTap});
+  static const String city = 'Madurai';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = context.fuelTheme;
+    final prices = ref.watch(dailyFuelPricesProvider(city));
 
-    final stationCount = stationsAsync.when(
-      data: (stations) => stations.length,
-      loading: () => 0,
-      error: (_, _) => 0,
-    );
-
-    final loading = stationsAsync.isLoading;
-
-    final stationLabel = loading ? 'SCANNING' : '$stationCount NEARBY';
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 235,
-        decoration: BoxDecoration(
-          color: FuelSenseDesignTokens.graphiteDeep,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: theme.border),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'DAILY FUEL PRICES',
+          style: TextStyle(
+            color: theme.accent,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.5,
+          ),
         ),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: CustomPaint(
-                  painter: _MapGridPainter(
-                    gridColor: FuelSenseDesignTokens.graphiteSoft,
-                    routeColor: FuelSenseDesignTokens.sageDeep,
-                  ),
-                ),
+        const SizedBox(height: 5),
+        Text(
+          'Know the rate before you refuel.',
+          style: TextStyle(
+            color: theme.textPrimary,
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$city · ₹ per litre',
+          style: TextStyle(color: theme.textMuted, fontSize: 11),
+        ),
+        const SizedBox(height: 14),
+        prices.when(
+          loading: () => const Row(
+            children: [
+              Expanded(
+                child: _FuelPriceCard(title: 'PETROL', value: 'Loading...'),
               ),
-            ),
-
-            Positioned(
-              top: -80,
-              right: -70,
-              child: IgnorePointer(
-                child: Container(
-                  width: 190,
-                  height: 190,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: theme.accent.withValues(alpha: 0.045),
-                    boxShadow: [
-                      BoxShadow(
-                        color: theme.accent.withValues(alpha: 0.06),
-                        blurRadius: 90,
-                        spreadRadius: 18,
-                      ),
-                    ],
-                  ),
-                ),
+              SizedBox(width: 12),
+              Expanded(
+                child: _FuelPriceCard(title: 'DIESEL', value: 'Loading...'),
               ),
-            ),
-
-            Positioned(
-              top: 16,
-              left: 16,
-              child: const _MapBadge(
-                icon: Icons.radar_rounded,
-                label: 'LIVE GIS',
-              ),
-            ),
-
-            Positioned(
-              top: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: FuelSenseDesignTokens.graphiteDeep.withValues(
-                    alpha: 0.88,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: theme.border),
-                ),
-                child: Text(
-                  stationLabel,
-                  style: TextStyle(
-                    color: loading ? theme.warning : theme.success,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ),
-            ),
-
-            Positioned(
-              left: 42,
-              top: 105,
-              child: _MapPoint(color: theme.accent),
-            ),
-
-            Positioned(
-              right: 80,
-              top: 80,
-              child: _MapPoint(color: theme.accent),
-            ),
-
-            Positioned(
-              right: 145,
-              bottom: 58,
-              child: _MapPoint(color: theme.accent),
-            ),
-
-            Positioned(
-              left: 18,
-              right: 18,
-              bottom: 16,
-              child: Row(
+            ],
+          ),
+          error: (error, stack) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      'Spatial operations map',
-                      style: TextStyle(
-                        color: theme.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: _FuelPriceCard(
+                      title: 'PETROL',
+                      value: 'Unavailable',
                     ),
                   ),
-
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.accent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.arrow_forward_rounded,
-                      color: FuelSenseDesignTokens.graphiteDeep,
-                      size: 18,
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: _FuelPriceCard(
+                      title: 'DIESEL',
+                      value: 'Unavailable',
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              Text(
+                'Verified prices could not be loaded. Please try again later.',
+                style: TextStyle(color: theme.textMuted, fontSize: 10),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () =>
+                      ref.invalidate(dailyFuelPricesProvider(city)),
+                  icon: const Icon(Icons.refresh_rounded, size: 15),
+                  label: const Text('Retry'),
+                ),
+              ),
+            ],
+          ),
+          data: (data) {
+            final updated = data.updatedAt;
+            final updatedLabel = updated == null
+                ? 'Update time not supplied by provider'
+                : 'Updated ${updated.toLocal().toString().substring(0, 16)}';
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _FuelPriceCard(
+                        title: 'PETROL',
+                        value: '₹${data.petrol.toStringAsFixed(2)}',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _FuelPriceCard(
+                        title: 'DIESEL',
+                        value: '₹${data.diesel.toStringAsFixed(2)}',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '$updatedLabel · Source: ${data.source}',
+                  style: TextStyle(
+                    color: theme.textMuted,
+                    fontSize: 10,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
-      ),
+      ],
     );
   }
 }
 
-// -----------------------------------------------------------------------------
-// MAP BADGE
-// -----------------------------------------------------------------------------
+class _FuelPriceCard extends StatelessWidget {
+  const _FuelPriceCard({required this.title, required this.value});
 
-class _MapBadge extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _MapBadge({required this.icon, required this.label});
+  final String title;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.fuelTheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      constraints: const BoxConstraints(minHeight: 112),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: FuelSenseDesignTokens.graphiteDeep.withValues(alpha: 0.90),
-        borderRadius: BorderRadius.circular(11),
+        color: theme.surfaceElevated,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: theme.border),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: theme.accent),
-
-          const SizedBox(width: 6),
-
           Text(
-            label,
+            title,
             style: TextStyle(
-              color: theme.textPrimary,
-              fontSize: 9,
+              color: theme.textSecondary,
+              fontSize: 10,
               fontWeight: FontWeight.w800,
-              letterSpacing: 1,
+              letterSpacing: .8,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// MAP POINT
-// -----------------------------------------------------------------------------
-
-class _MapPoint extends StatelessWidget {
-  final Color color;
-
-  const _MapPoint({required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 13,
-      height: 13,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: FuelSenseDesignTokens.graphiteDeep, width: 3),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.42),
-            blurRadius: 14,
-            spreadRadius: 1,
+          const SizedBox(height: 15),
+          Text(
+            value,
+            style: TextStyle(
+              color: theme.textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value.startsWith('₹') ? 'per litre' : 'Live lookup',
+            style: TextStyle(color: theme.textMuted, fontSize: 10),
           ),
         ],
       ),
     );
   }
 }
-
-// -----------------------------------------------------------------------------
-// CURRENT VEHICLE
-// -----------------------------------------------------------------------------
 
 class _Footer extends StatelessWidget {
   const _Footer();
@@ -441,65 +371,3 @@ class _Footer extends StatelessWidget {
 // -----------------------------------------------------------------------------
 // MAP BACKGROUND PAINTER
 // -----------------------------------------------------------------------------
-
-class _MapGridPainter extends CustomPainter {
-  final Color gridColor;
-  final Color routeColor;
-
-  const _MapGridPainter({required this.gridColor, required this.routeColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = gridColor.withValues(alpha: 0.55)
-      ..strokeWidth = 1;
-
-    const spacing = 34.0;
-
-    for (double x = 0; x < size.width; x += spacing) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-
-    for (double y = 0; y < size.height; y += spacing) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final routePaint = Paint()
-      ..color = routeColor.withValues(alpha: 0.65)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    final path = Path()
-      ..moveTo(0, size.height * 0.70)
-      ..quadraticBezierTo(
-        size.width * 0.35,
-        size.height * 0.15,
-        size.width,
-        size.height * 0.42,
-      );
-
-    canvas.drawPath(path, routePaint);
-
-    final secondaryRoutePaint = Paint()
-      ..color = gridColor.withValues(alpha: 0.75)
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke;
-
-    final secondaryPath = Path()
-      ..moveTo(size.width * 0.08, 0)
-      ..quadraticBezierTo(
-        size.width * 0.45,
-        size.height * 0.55,
-        size.width,
-        size.height * 0.72,
-      );
-
-    canvas.drawPath(secondaryPath, secondaryRoutePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapGridPainter oldDelegate) {
-    return oldDelegate.gridColor != gridColor ||
-        oldDelegate.routeColor != routeColor;
-  }
-}

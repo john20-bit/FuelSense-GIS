@@ -6,6 +6,8 @@ import '../core/design/app_theme_extension.dart';
 import '../core/design/design_tokens.dart';
 import '../core/widgets/app_background.dart';
 import '../features/home/screens/home_screen.dart';
+import '../features/fuel_quality/screens/fuel_quality_screen.dart';
+import '../features/garage/presentation/garage_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
 import '../features/spatial/screens/spatial_mapping_screen.dart';
 import 'app_shell_provider.dart';
@@ -16,6 +18,8 @@ class AppShell extends ConsumerWidget {
   static const _pages = [
     HomeScreen(),
     SpatialMappingScreen(),
+    GarageScreen(),
+    FuelQualityScreen(),
     SettingsScreen(),
   ];
 
@@ -28,7 +32,17 @@ class AppShell extends ConsumerWidget {
     _NavItemData(
       icon: Icons.map_outlined,
       activeIcon: Icons.map_rounded,
-      label: 'Spatial Mapping',
+      label: 'Map',
+    ),
+    _NavItemData(
+      icon: Icons.directions_car_outlined,
+      activeIcon: Icons.directions_car_filled_rounded,
+      label: 'Vehicle',
+    ),
+    _NavItemData(
+      icon: Icons.monitor_heart_outlined,
+      activeIcon: Icons.monitor_heart_rounded,
+      label: 'Monitoring',
     ),
     _NavItemData(
       icon: Icons.settings_outlined,
