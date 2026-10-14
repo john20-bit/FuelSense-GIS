@@ -1,0 +1,181 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function optionalType(data, field, expectedType) {
+      return !(field in data.keys())
+        || data[field] == null
+        || (expectedType == 'string' && data[field] is string)
+        || (expectedType == 'number' && data[field] is number)
+        || (expectedType == 'int' && data[field] is int)
+        || (expectedType == 'bool' && data[field] is bool)
+        || (expectedType == 'timestamp' && data[field] is timestamp);
+    }
+
+    function nonNegative(data, field) {
+      return !(field in data.keys())
+        || data[field] == null
+        || (data[field] is number && data[field] >= 0);
+    }
+
+    function validVehicleRanges(data) {
+      return nonNegative(data, 'tankCapacity')
+        && nonNegative(data, 'claimedMileage')
+        && nonNegative(data, 'currentFuelLevel')
+        && nonNegative(data, 'currentMileage')
+        && nonNegative(data, 'currentOdometer')
+        && nonNegative(data, 'engineDisplacement')
+        && nonNegative(data, 'horsepower')
+        && nonNegative(data, 'torque')
+        && (
+          !('modelYear' in data.keys())
+          || data.modelYear == null
+          || (data.modelYear is int
+            && data.modelYear >= 1886
+            && data.modelYear <= 2100)
+        )
+        && (
+          !('currentFuelLevel' in data.keys())
+          || data.currentFuelLevel == null
+          || !('tankCapacity' in data.keys())
+          || data.tankCapacity == null
+          || data.currentFuelLevel <= data.tankCapacity
+        );
+    }
+
+    function validVehicle(data) {
+      return data.keys().hasOnly([
+        'catalogId', 'name', 'registrationNumber', 'fuelType',
+        'powertrainType', 'tankCapacity', 'claimedMileage', 'make',
+        'model', 'variant', 'modelYear', 'recommendedFuel',
+        'e20Compatible', 'e85Compatible', 'sourceName', 'sourceUrl',
+        'verifiedAt', 'currentFuelLevel', 'currentMileage',
+        'currentOdometer', 'engineDisplacement', 'horsepower', 'torque',
+        'transmission', 'drivetrain', 'market', 'country',
+        'createdAt', 'updatedAt'
+      ])
+      && data.name is string
+      && data.registrationNumber is string
+      && data.fuelType is string
+      && optionalType(data, 'catalogId', 'int')
+      && optionalType(data, 'powertrainType', 'string')
+      && optionalType(data, 'tankCapacity', 'number')
+      && optionalType(data, 'claimedMileage', 'number')
+      && optionalType(data, 'make', 'string')
+      && optionalType(data, 'model', 'string')
+      && optionalType(data, 'variant', 'string')
+      && optionalType(data, 'modelYear', 'int')
+      && optionalType(data, 'recommendedFuel', 'string')
+      && optionalType(data, 'e20Compatible', 'bool')
+      && optionalType(data, 'e85Compatible', 'bool')
+      && optionalType(data, 'sourceName', 'string')
+      && optionalType(data, 'sourceUrl', 'string')
+      && optionalType(data, 'verifiedAt', 'string')
+      && optionalType(data, 'currentFuelLevel', 'number')
+      && optionalType(data, 'currentMileage', 'number')
+      && optionalType(data, 'currentOdometer', 'number')
+      && optionalType(data, 'engineDisplacement', 'number')
+      && optionalType(data, 'horsepower', 'number')
+      && optionalType(data, 'torque', 'number')
+      && optionalType(data, 'transmission', 'string')
+      && optionalType(data, 'drivetrain', 'string')
+      && optionalType(data, 'market', 'string')
+      && optionalType(data, 'country', 'string')
+      && optionalType(data, 'createdAt', 'timestamp')
+      && optionalType(data, 'updatedAt', 'timestamp')
+      && validVehicleRanges(data);
+    }
+
+    match /users/{uid} {
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          'uid', 'name', 'email', 'phone', 'role', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'customer'
+        && request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.phone is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      allow read: if isOwner(uid);
+
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'phone', 'updatedAt'
+        ])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.name is string
+        && request.resource.data.phone is string
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+
+      match /vehicles/{vehicleId} {
+        allow create: if isOwner(uid)
+          && validVehicle(request.resource.data);
+
+        allow read: if isOwner(uid);
+
+        allow update: if isOwner(uid)
+          && validVehicle(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'catalogId', 'name', 'registrationNumber', 'fuelType',
+            'powertrainType', 'tankCapacity', 'claimedMileage', 'make',
+            'model', 'variant', 'modelYear', 'recommendedFuel',
+            'e20Compatible', 'e85Compatible', 'sourceName', 'sourceUrl',
+            'verifiedAt', 'currentFuelLevel', 'currentMileage',
+            'currentOdometer', 'engineDisplacement', 'horsepower', 'torque',
+            'transmission', 'drivetrain', 'market', 'country', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(uid);
+      }
+
+      match /telemetry/{telemetryId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /preferences/{preferenceId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /phaseSeparationAssessments/{assessmentId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    match /vehicleCatalog/{catalogId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /news/{articleId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /stations/{stationId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
