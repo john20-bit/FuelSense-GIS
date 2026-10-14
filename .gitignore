@@ -1,24 +1,85 @@
-# macOS
+# Environment and secrets
+.env
+.env.*
+!.env.example
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase.json
+**/firebase_options.dart
+service-account*.json
+firebase-service-account*.json
+*.json.key
+
+# macOS and IDE
 .DS_Store
+**/.DS_Store
+.vscode/
+.fleet/
+.idea/
+*.iml
+*.ipr
+*.iws
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 
-# Flutter
+# Flutter and native build artifacts
 **/build/
 **/.dart_tool/
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
 **/.packages
-
-# VS Code
-.vscode/
-
-# IntelliJ / Android Studio
-.idea/
-*.iml
+**/.pub-cache/
+**/.pub/
+**/coverage/
+**/ios/Flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+**/Pods/
+**/.symlinks/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcuserdatad/
+*.hprof
+*.apk
+*.aab
 
 # Logs
 *.log
+
+# Backups and generated archives
+apps/*_BACKUP/
+apps/*_BACKUP*/
+apps/*_PHASE*_TEST/
+apps/*_LATEST.zip
+apps/*_UI_REDESIGN.zip
+apps/*_full_backup.zip
+apps/*_CURRENT.zip
+apps/*-AUDIT.zip
+apps/*-PRE-ARCHITECTURE-BACKUP/
+apps/*.zip
+apps/*generated_test/
+apps/fuelsense_mobile/**/*.backup
+apps/fuelsense_mobile/**/*.backup_*
+apps/fuelsense_mobile/main
+theme_backups/
+skills-lock.json
+
+# Legacy local projects
+apps/fuelsense-backend-fastapi/
+apps/fuelsense-backend-java/
+apps/fuelsense-satellite-service/
+functions/
+spatial mapping/
+
+# Local tooling
+.agents/
+.claude/
