@@ -1,0 +1,38 @@
+name: FuelSense GIS News Ingestion
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  ingest-news:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/763420698209/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: fuelsense-news-ingester@fuelsense-ai-b3e97.iam.gserviceaccount.com
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tools/news/requirements.txt
+
+      - name: Ingest news into Firestore
+        run: |
+          python tools/news/ingest_news.py

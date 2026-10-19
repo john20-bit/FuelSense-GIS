@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -61,44 +62,49 @@ service cloud.firestore {
         'verifiedAt', 'currentFuelLevel', 'currentMileage',
         'currentOdometer', 'engineDisplacement', 'horsepower', 'torque',
         'transmission', 'drivetrain', 'market', 'country',
-        'createdAt', 'updatedAt'
+        'vehicleImageUrl', 'registrationCertificateUrl',
+        'isManuallyEntered', 'createdAt', 'updatedAt'
       ])
-      && data.name is string
-      && data.registrationNumber is string
-      && data.fuelType is string
-      && optionalType(data, 'catalogId', 'int')
-      && optionalType(data, 'powertrainType', 'string')
-      && optionalType(data, 'tankCapacity', 'number')
-      && optionalType(data, 'claimedMileage', 'number')
-      && optionalType(data, 'make', 'string')
-      && optionalType(data, 'model', 'string')
-      && optionalType(data, 'variant', 'string')
-      && optionalType(data, 'modelYear', 'int')
-      && optionalType(data, 'recommendedFuel', 'string')
-      && optionalType(data, 'e20Compatible', 'bool')
-      && optionalType(data, 'e85Compatible', 'bool')
-      && optionalType(data, 'sourceName', 'string')
-      && optionalType(data, 'sourceUrl', 'string')
-      && optionalType(data, 'verifiedAt', 'string')
-      && optionalType(data, 'currentFuelLevel', 'number')
-      && optionalType(data, 'currentMileage', 'number')
-      && optionalType(data, 'currentOdometer', 'number')
-      && optionalType(data, 'engineDisplacement', 'number')
-      && optionalType(data, 'horsepower', 'number')
-      && optionalType(data, 'torque', 'number')
-      && optionalType(data, 'transmission', 'string')
-      && optionalType(data, 'drivetrain', 'string')
-      && optionalType(data, 'market', 'string')
-      && optionalType(data, 'country', 'string')
-      && optionalType(data, 'createdAt', 'timestamp')
-      && optionalType(data, 'updatedAt', 'timestamp')
-      && validVehicleRanges(data);
+        && data.name is string
+        && data.registrationNumber is string
+        && data.fuelType is string
+        && optionalType(data, 'catalogId', 'int')
+        && optionalType(data, 'powertrainType', 'string')
+        && optionalType(data, 'tankCapacity', 'number')
+        && optionalType(data, 'claimedMileage', 'number')
+        && optionalType(data, 'make', 'string')
+        && optionalType(data, 'model', 'string')
+        && optionalType(data, 'variant', 'string')
+        && optionalType(data, 'modelYear', 'int')
+        && optionalType(data, 'recommendedFuel', 'string')
+        && optionalType(data, 'e20Compatible', 'bool')
+        && optionalType(data, 'e85Compatible', 'bool')
+        && optionalType(data, 'sourceName', 'string')
+        && optionalType(data, 'sourceUrl', 'string')
+        && optionalType(data, 'verifiedAt', 'string')
+        && optionalType(data, 'currentFuelLevel', 'number')
+        && optionalType(data, 'currentMileage', 'number')
+        && optionalType(data, 'currentOdometer', 'number')
+        && optionalType(data, 'engineDisplacement', 'number')
+        && optionalType(data, 'horsepower', 'number')
+        && optionalType(data, 'torque', 'number')
+        && optionalType(data, 'transmission', 'string')
+        && optionalType(data, 'drivetrain', 'string')
+        && optionalType(data, 'market', 'string')
+        && optionalType(data, 'country', 'string')
+        && optionalType(data, 'vehicleImageUrl', 'string')
+        && optionalType(data, 'registrationCertificateUrl', 'string')
+        && optionalType(data, 'isManuallyEntered', 'bool')
+        && optionalType(data, 'createdAt', 'timestamp')
+        && optionalType(data, 'updatedAt', 'timestamp')
+        && validVehicleRanges(data);
     }
 
     match /users/{uid} {
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly([
-          'uid', 'name', 'email', 'phone', 'role', 'createdAt', 'updatedAt'
+          'uid', 'name', 'email', 'phone', 'role',
+          'createdAt', 'updatedAt'
         ])
         && request.resource.data.uid == uid
         && request.resource.data.role == 'customer'
@@ -139,7 +145,9 @@ service cloud.firestore {
             'e20Compatible', 'e85Compatible', 'sourceName', 'sourceUrl',
             'verifiedAt', 'currentFuelLevel', 'currentMileage',
             'currentOdometer', 'engineDisplacement', 'horsepower', 'torque',
-            'transmission', 'drivetrain', 'market', 'country', 'updatedAt'
+            'transmission', 'drivetrain', 'market', 'country',
+            'vehicleImageUrl', 'registrationCertificateUrl',
+            'isManuallyEntered', 'updatedAt'
           ]);
 
         allow delete: if isOwner(uid);

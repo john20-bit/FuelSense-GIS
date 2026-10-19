@@ -10,7 +10,7 @@ import '../../features/auth/presentation/register_screen.dart';
 import '../../features/fuel/screens/nearby_fuel_screen.dart';
 import '../../features/fuel/screens/station_details_screen.dart';
 import '../../features/spatial/screens/spatial_mapping_screen.dart';
-import '../../features/fuel_quality/screens/fuel_quality_screen.dart';
+import 'package:fuelsense_mobile/features/fuel_quality/screens/fuel_quality_screen.dart';
 import '../../features/fuel/screens/energy_history_screen.dart';
 import '../../features/fuel/models/fuel_station_model.dart';
 import '../../features/map/screens/map_screen.dart';
@@ -106,3 +106,4 @@ final appRouter = GoRouter(
     GoRoute(path: '/home', builder: (context, state) => const AppShell()),
   ],
 );
+

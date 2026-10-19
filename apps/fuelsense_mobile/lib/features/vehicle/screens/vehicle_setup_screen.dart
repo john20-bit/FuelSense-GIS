@@ -1,6 +1,12 @@
+﻿import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -11,6 +17,7 @@ import '../../../shared/models/vehicle.dart';
 import '../providers/vehicle_catalog_provider.dart';
 import '../providers/vehicle_provider.dart';
 import '../repositories/vehicle_repository.dart';
+import '../services/vehicle_registration_service.dart';
 
 class VehicleSetupScreen extends ConsumerStatefulWidget {
   const VehicleSetupScreen({super.key, this.vehicle});
@@ -25,12 +32,23 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _regController = TextEditingController();
+  final _makeController = TextEditingController();
+  final _modelController = TextEditingController();
+  final _fuelTypeController = TextEditingController();
   final _fuelController = TextEditingController();
   final _odometerController = TextEditingController();
   final _efficiencyController = TextEditingController();
 
   VehicleCatalog? _selected;
   bool _submitting = false;
+  bool _lookingUpRegistration = false;
+  bool _lookupFailed = false;
+  bool _manualEntry = false;
+  XFile? _vehicleImage;
+  PlatformFile? _registrationCertificate;
+  final _imagePicker = ImagePicker();
+  VehicleRegistrationDetails? _registrationDetails;
+  final _registrationService = VehicleRegistrationService();
   String? _error;
 
   bool get _isEditing => widget.vehicle != null;
@@ -42,6 +60,10 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
     if (vehicle != null) {
       _nameController.text = vehicle.name;
       _regController.text = vehicle.registrationNumber;
+      _makeController.text = vehicle.make ?? '';
+      _modelController.text = vehicle.model ?? '';
+      _fuelTypeController.text = vehicle.fuelType;
+      _manualEntry = vehicle.isManuallyEntered || vehicle.catalogId == null;
       _fuelController.text = vehicle.currentFuelLevel.toString();
       _odometerController.text = vehicle.currentOdometer.toString();
       _efficiencyController.text = vehicle.currentMileage > 0
@@ -55,6 +77,9 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
     for (final c in [
       _nameController,
       _regController,
+      _makeController,
+      _modelController,
+      _fuelTypeController,
       _fuelController,
       _odometerController,
       _efficiencyController,
@@ -66,122 +91,266 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
 
   Future<void> _pickCatalog(List<VehicleCatalog> entries) async {
     final query = TextEditingController();
-    final picked = await showModalBottomSheet<VehicleCatalog>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final q = query.text.trim().toLowerCase();
-            final filtered = entries
-                .where(
-                  (e) =>
-                      e.displayName.toLowerCase().contains(q) ||
-                      e.fuelType.toLowerCase().contains(q),
-                )
-                .toList();
+    VehicleCatalog? picked;
 
-            return SafeArea(
-              child: SizedBox(
-                height: MediaQuery.sizeOf(context).height * 0.82,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'SELECT VEHICLE',
-                            style: AppTextStyles.labelTechnical,
+    try {
+      picked = await showModalBottomSheet<VehicleCatalog>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: AppColors.surface,
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              final q = query.text.trim().toLowerCase();
+              final filtered = entries
+                  .where(
+                    (e) =>
+                        e.displayName.toLowerCase().contains(q) ||
+                        e.fuelType.toLowerCase().contains(q),
+                  )
+                  .toList();
+
+              return SafeArea(
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(sheetContext).height * 0.82,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              'SELECT VEHICLE',
+                              style: AppTextStyles.labelTechnical,
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              onPressed: () =>
+                                  Navigator.of(sheetContext).pop(),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: query,
+                          autofocus: true,
+                          onChanged: (_) => setSheetState(() {}),
+                          decoration: InputDecoration(
+                            hintText: 'Search make, model or fuel',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: query.text.isEmpty
+                                ? null
+                                : IconButton(
+                                    onPressed: () {
+                                      query.clear();
+                                      setSheetState(() {});
+                                    },
+                                    icon: const Icon(Icons.clear_rounded),
+                                  ),
                           ),
-                          const Spacer(),
-                          IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: query,
-                        autofocus: true,
-                        onChanged: (_) => setSheetState(() {}),
-                        decoration: InputDecoration(
-                          hintText: 'Search make, model or fuel',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          suffixIcon: query.text.isEmpty
-                              ? null
-                              : IconButton(
-                                  onPressed: () {
-                                    query.clear();
-                                    setSheetState(() {});
+                        ),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: filtered.isEmpty
+                              ? const Center(
+                                  child: Text('No matching vehicles'),
+                                )
+                              : ListView.separated(
+                                  itemCount: filtered.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final item = filtered[index];
+                                    return ListTile(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          AppRadius.md,
+                                        ),
+                                        side: BorderSide(
+                                          color: AppColors.border,
+                                        ),
+                                      ),
+                                      title: Text(item.displayName),
+                                      subtitle: Text(
+                                        '${item.fuelLabel} • ${item.compatibilityLabel}',
+                                      ),
+                                      trailing: const Icon(
+                                        Icons.chevron_right_rounded,
+                                      ),
+                                      onTap: () =>
+                                          Navigator.of(sheetContext).pop(item),
+                                    );
                                   },
-                                  icon: const Icon(Icons.clear_rounded),
                                 ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: filtered.isEmpty
-                            ? const Center(child: Text('No matching vehicles'))
-                            : ListView.separated(
-                                itemCount: filtered.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(height: 8),
-                                itemBuilder: (context, index) {
-                                  final item = filtered[index];
-                                  return ListTile(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                        AppRadius.md,
-                                      ),
-                                      side: BorderSide(color: AppColors.border),
-                                    ),
-                                    title: Text(item.displayName),
-                                    subtitle: Text(
-                                      '${item.fuelLabel} • ${item.compatibilityLabel}',
-                                    ),
-                                    trailing: const Icon(
-                                      Icons.chevron_right_rounded,
-                                    ),
-                                    onTap: () => Navigator.pop(context, item),
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
-    query.dispose();
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      // Allow the modal route and its TextField to finish disposing.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      query.dispose();
+    }
 
     if (picked == null || !mounted) return;
+
     setState(() {
       _selected = picked;
-      _nameController.text = '${picked.make} ${picked.model}'.trim();
-      if (picked.tankCapacity != null) {
+      _nameController.text = '${picked!.make} ${picked.model}'.trim();
+
+      if (picked!.tankCapacity != null) {
         _fuelController.clear();
       }
+
       _efficiencyController.text =
-          picked.claimedMileage?.toStringAsFixed(1) ?? '';
+          picked!.claimedMileage?.toStringAsFixed(1) ?? '';
     });
+  }
+
+  Future<void> _pickVehicleImage() async {
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1800,
+      );
+      if (image != null && mounted) {
+        setState(() {
+          _vehicleImage = image;
+          _error = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Unable to select the vehicle image.');
+      }
+    }
+  }
+
+  Future<void> _pickRegistrationCertificate() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      );
+
+      if (files.isNotEmpty && mounted) {
+        final file = files.first;
+
+        final filePath = file.path;
+        if (filePath == null || filePath.isEmpty) {
+          setState(() {
+            _error = 'Could not access the selected certificate file.';
+          });
+          return;
+        }
+
+        final byteLength = await File(filePath).length();
+        if (byteLength > 10 * 1024 * 1024) {
+          setState(() {
+            _error = 'The registration certificate must be 10 MB or smaller.';
+          });
+          return;
+        }
+
+        setState(() {
+          _registrationCertificate = file;
+          _error = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Unable to select the registration certificate.';
+        });
+      }
+    }
+  }
+
+  void _useManualEntry() {
+    setState(() {
+      _manualEntry = true;
+      _registrationDetails = null;
+      _selected = null;
+      _error = null;
+    });
+  }
+
+  Future<void> _lookupRegistration() async {
+    final registration = _regController.text.trim();
+    if (registration.isEmpty) {
+      setState(() => _error = 'Enter your registration number first.');
+      return;
+    }
+
+    setState(() {
+      _lookingUpRegistration = true;
+      _error = null;
+    });
+
+    try {
+      final details = await _registrationService.lookup(registration);
+      if (!mounted) return;
+
+      setState(() {
+        _registrationDetails = details;
+        _lookupFailed = false;
+        _regController.text = details.registrationNumber;
+        final identity = [
+          details.make,
+          details.model,
+          details.variant,
+        ].where((part) => part.trim().isNotEmpty).join(' ');
+        if (identity.isNotEmpty) {
+          _nameController.text = identity;
+        }
+        if (details.make.trim().isNotEmpty) {
+          _makeController.text = details.make;
+        }
+        if (details.model.trim().isNotEmpty) {
+          _modelController.text = details.model;
+        }
+        if (details.fuelType.trim().isNotEmpty) {
+          _fuelTypeController.text = details.fuelType;
+        }
+        _selected = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _registrationDetails = null;
+        _lookupFailed = true;
+        _error =
+            'Registration lookup failed. Try again or enter details manually.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _lookingUpRegistration = false);
+      }
+    }
   }
 
   Future<void> _submit() async {
     final existing = widget.vehicle;
     final selected = _selected;
+    final manual = _manualEntry || selected == null;
 
-    if (existing == null && selected == null) {
-      setState(
-        () => _error = 'Select your exact vehicle from the verified catalog.',
-      );
+    if (manual &&
+        (_makeController.text.trim().isEmpty ||
+            _modelController.text.trim().isEmpty ||
+            _fuelTypeController.text.trim().isEmpty)) {
+      setState(() {
+        _manualEntry = true;
+        _error = 'Enter the make, model and fuel type.';
+      });
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -199,20 +368,85 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
           existing?.currentMileage ??
           selected?.claimedMileage ??
           0;
+      final capacity = manual ? existing?.tankCapacity : selected.tankCapacity;
 
-      final capacity = selected?.tankCapacity ?? existing?.tankCapacity;
       if (capacity != null && capacity > 0 && fuel > capacity) {
         throw Exception(
-          'Current fuel cannot exceed the tank capacity of '
-          '${capacity.toStringAsFixed(0)} L.',
+          'Current fuel cannot exceed the tank capacity of ${capacity.toStringAsFixed(0)} L.',
         );
+      }
+
+      final user = FirebaseAuth.instance.currentUser;
+      if ((_vehicleImage != null || _registrationCertificate != null) &&
+          user == null) {
+        throw Exception('Sign in before uploading vehicle documents.');
+      }
+
+      String? imageUrl;
+      String? certificateUrl;
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+
+      if (_vehicleImage != null) {
+        final image = _vehicleImage!;
+        final originalExtension = image.name.contains('.')
+            ? image.name.split('.').last.toLowerCase()
+            : '';
+        final extension = originalExtension == 'jpg'
+            ? 'jpg'
+            : originalExtension;
+        const supportedImageTypes = <String, String>{
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'webp': 'image/webp',
+          'gif': 'image/gif',
+          'avif': 'image/avif',
+          'heic': 'image/heic',
+          'heif': 'image/heif',
+        };
+
+        final contentType = supportedImageTypes[extension];
+        if (contentType == null) {
+          throw Exception(
+            'Unsupported vehicle photo format. Choose a JPG, PNG, WEBP, AVIF or HEIC image.',
+          );
+        }
+
+        final imageRef = FirebaseStorage.instance.ref(
+          'users/${user!.uid}/vehicle-attachments/$stamp-vehicle.$extension',
+        );
+        await imageRef.putFile(
+          File(image.path),
+          SettableMetadata(contentType: contentType),
+        );
+        imageUrl = await imageRef.getDownloadURL();
+      }
+
+      if (_registrationCertificate != null) {
+        final picked = _registrationCertificate!;
+        final path = picked.path;
+        if (path == null || path.isEmpty) {
+          throw Exception('Could not read the selected certificate file.');
+        }
+        final ext = (picked.extension ?? '').toLowerCase();
+        final contentType = ext == 'pdf'
+            ? 'application/pdf'
+            : 'image/${ext == 'jpg' ? 'jpeg' : ext}';
+        final certificateRef = FirebaseStorage.instance.ref(
+          'users/${user!.uid}/vehicle-attachments/$stamp-registration.$ext',
+        );
+        await certificateRef.putFile(
+          File(path),
+          SettableMetadata(contentType: contentType),
+        );
+        certificateUrl = await certificateRef.getDownloadURL();
       }
 
       if (existing != null) {
         final documentId = existing.documentId;
         if (documentId == null || documentId.isEmpty) {
           throw Exception(
-            'This vehicle has no saved document ID. Refresh the Garage and try again.',
+            'Vehicle document ID is missing. Refresh the Garage and try again.',
           );
         }
 
@@ -220,61 +454,71 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
           vehicleDocumentId: documentId,
           name: _nameController.text.trim(),
           registrationNumber: _regController.text.trim(),
-          fuelType: selected?.fuelType ?? existing.fuelType,
-          tankCapacity: selected == null
-              ? existing.tankCapacity
-              : selected.tankCapacity,
-          catalogId: selected?.id ?? existing.catalogId,
-          make: selected?.make ?? existing.make,
-          model: selected?.model ?? existing.model,
-          variant: selected?.variant ?? existing.variant,
-          modelYear: selected?.modelYear ?? existing.modelYear,
-          e20Compatible: selected?.e20Compatible ?? existing.e20Compatible,
-          e85Compatible: selected?.e85Compatible ?? existing.e85Compatible,
-          replaceCatalog: selected != null,
-          claimedMileage: selected?.claimedMileage,
-          recommendedFuel: selected?.recommendedFuel,
-          sourceName: selected?.sourceName,
-          sourceUrl: selected?.sourceUrl,
-          verifiedAt: selected?.verifiedAt,
-          engineDisplacement: selected?.engineDisplacement,
-          horsepower: selected?.horsepower,
-          torque: selected?.torque,
-          transmission: selected?.transmission,
-          drivetrain: selected?.drivetrain,
-          market: selected?.market,
-          country: selected?.country,
+          fuelType: manual
+              ? _fuelTypeController.text.trim()
+              : selected.fuelType,
+          tankCapacity: manual ? existing.tankCapacity : selected.tankCapacity,
+          catalogId: manual ? null : selected.id,
+          make: manual ? _makeController.text.trim() : selected.make,
+          model: manual ? _modelController.text.trim() : selected.model,
+          variant: manual ? null : selected.variant,
+          modelYear: manual ? existing.modelYear : selected.modelYear,
+          e20Compatible: manual
+              ? existing.e20Compatible
+              : selected.e20Compatible,
+          e85Compatible: manual
+              ? existing.e85Compatible
+              : selected.e85Compatible,
+          replaceCatalog: true,
+          claimedMileage: manual ? null : selected.claimedMileage,
+          recommendedFuel: manual ? null : selected.recommendedFuel,
+          sourceName: manual ? null : selected.sourceName,
+          sourceUrl: manual ? null : selected.sourceUrl,
+          verifiedAt: manual ? null : selected.verifiedAt,
+          engineDisplacement: manual ? null : selected.engineDisplacement,
+          horsepower: manual ? null : selected.horsepower,
+          torque: manual ? null : selected.torque,
+          transmission: manual ? null : selected.transmission,
+          drivetrain: manual ? null : selected.drivetrain,
+          market: manual ? null : selected.market,
+          country: manual ? null : selected.country,
           currentMileage: mileage,
           currentOdometer: odo,
           currentFuel: fuel,
+          vehicleImageUrl: imageUrl,
+          registrationCertificateUrl: certificateUrl,
+          isManuallyEntered: manual,
         );
       } else {
         await VehicleRepository.instance.createVehicle(
-          catalogId: selected!.id,
+          catalogId: manual ? null : selected.id,
           name: _nameController.text.trim(),
           registrationNumber: _regController.text.trim(),
-          fuelType: selected.fuelType,
-          tankCapacity: selected.tankCapacity,
+          fuelType: manual
+              ? _fuelTypeController.text.trim()
+              : selected.fuelType,
+          tankCapacity: manual ? null : selected.tankCapacity,
           claimedMileage: mileage,
-          make: selected.make,
-          model: selected.model,
-          variant: selected.variant,
-          modelYear: selected.modelYear,
-          recommendedFuel: selected.recommendedFuel,
-          e20Compatible: selected.e20Compatible,
-          e85Compatible: selected.e85Compatible,
-          sourceName: selected.sourceName,
-          sourceUrl: selected.sourceUrl,
-          verifiedAt: selected.verifiedAt,
+          make: manual ? _makeController.text.trim() : selected.make,
+          model: manual ? _modelController.text.trim() : selected.model,
+          variant: manual ? null : selected.variant,
+          modelYear: manual ? null : selected.modelYear,
+          recommendedFuel: manual ? null : selected.recommendedFuel,
+          e20Compatible: manual ? null : selected.e20Compatible,
+          e85Compatible: manual ? null : selected.e85Compatible,
+          sourceName: manual ? null : selected.sourceName,
+          sourceUrl: manual ? null : selected.sourceUrl,
+          verifiedAt: manual ? null : selected.verifiedAt,
           currentFuel: fuel,
           currentOdometer: odo,
+          vehicleImageUrl: imageUrl,
+          registrationCertificateUrl: certificateUrl,
+          isManuallyEntered: manual,
         );
       }
 
       ref.invalidate(vehicleProvider);
       if (!mounted) return;
-
-      // Return to Garage so the updated provider data is displayed.
       context.go('/garage');
     } catch (e) {
       if (!mounted) return;
@@ -305,13 +549,41 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
         children: [
           const AppBackground(),
           SafeArea(
-            child: catalog.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => _ErrorState(
-                message: e.toString().replaceFirst('Exception: ', ''),
-                onRetry: () => ref.invalidate(vehicleCatalogProvider),
-              ),
-              data: (entries) => _buildForm(entries),
+            child: Column(
+              children: [
+                if (catalog.isLoading)
+                  const LinearProgressIndicator(minHeight: 2),
+                if (catalog.hasError)
+                  Material(
+                    color: AppColors.surfaceElevated,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.cloud_off_outlined, size: 20),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Vehicle catalogue unavailable. You can enter details manually.',
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              ref.invalidate(vehicleCatalogProvider);
+                            },
+                            child: const Text('RETRY'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: _buildForm(catalog.asData?.value ?? const <VehicleCatalog>[]),
+                ),
+              ],
             ),
           ),
         ],
@@ -432,7 +704,7 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${selected.fuelLabel} • ${selected.compatibilityLabel}',
+                            '${selected.fuelLabel} â€¢ ${selected.compatibilityLabel}',
                             style: AppTextStyles.bodySecondary,
                           ),
                           if (selected.tankCapacity != null ||
@@ -445,7 +717,7 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
                                     '${selected.tankCapacity!.toStringAsFixed(0)} L tank',
                                   if (selected.claimedMileage != null)
                                     '${selected.claimedMileage!.toStringAsFixed(1)} km/L',
-                                ].join(' • '),
+                                ].join(' â€¢ '),
                                 style: AppTextStyles.labelTechnical.copyWith(
                                   color: AppColors.primaryCyan,
                                 ),
@@ -478,6 +750,102 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
               ),
               validator: _required,
             ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _lookingUpRegistration ? null : _lookupRegistration,
+                icon: _lookingUpRegistration
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.manage_search_rounded),
+                label: Text(
+                  _lookingUpRegistration
+                      ? 'Checking registration...'
+                      : 'Look up registration',
+                ),
+              ),
+            ),
+            if (_registrationDetails != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Verified source: ${_registrationDetails!.source}'
+                '${_registrationDetails!.manufactureYear == null ? '' : ' â€¢ ${_registrationDetails!.manufactureYear}'}',
+                style: AppTextStyles.bodySecondary,
+              ),
+            ],
+            if (_lookupFailed) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Lookup did not work. You can try again or enter the details manually.',
+                style: AppTextStyles.bodySecondary,
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _lookingUpRegistration
+                          ? null
+                          : _lookupRegistration,
+                      child: const Text('TRY AGAIN'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _useManualEntry,
+                      child: const Text('ENTER MANUALLY'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (!_manualEntry) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _useManualEntry,
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: const Text('Enter vehicle details manually'),
+                ),
+              ),
+            ],
+            if (_manualEntry) ...[
+              const SizedBox(height: 16),
+              _label('MAKE'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _makeController,
+                decoration: _decoration('e.g. Hyundai', Icons.factory_outlined),
+                validator: _manualEntry ? _required : null,
+              ),
+              const SizedBox(height: 12),
+              _label('MODEL'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _modelController,
+                decoration: _decoration(
+                  'e.g. Creta',
+                  Icons.directions_car_outlined,
+                ),
+                validator: _manualEntry ? _required : null,
+              ),
+              const SizedBox(height: 12),
+              _label('FUEL TYPE'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _fuelTypeController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: _decoration(
+                  'e.g. Petrol or Diesel',
+                  Icons.local_gas_station_outlined,
+                ),
+                validator: _manualEntry ? _required : null,
+              ),
+            ],
             const SizedBox(height: 20),
             _label('CURRENT ODOMETER'),
             const SizedBox(height: 8),
@@ -532,6 +900,25 @@ class _VehicleSetupScreenState extends ConsumerState<VehicleSetupScreen> {
                 'Catalog reference',
                 Icons.analytics_outlined,
                 suffix: 'km/L',
+              ),
+            ),
+            const SizedBox(height: 24),
+            _label('VEHICLE PHOTO (OPTIONAL)'),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _submitting ? null : _pickVehicleImage,
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: Text(_vehicleImage?.name ?? 'Choose vehicle photo'),
+            ),
+            const SizedBox(height: 12),
+            _label('REGISTRATION CERTIFICATE (OPTIONAL)'),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _submitting ? null : _pickRegistrationCertificate,
+              icon: const Icon(Icons.description_outlined),
+              label: Text(
+                _registrationCertificate?.name ??
+                    'Choose photo or PDF (max 10 MB)',
               ),
             ),
             const SizedBox(height: 24),
@@ -608,3 +995,6 @@ class _ErrorBanner extends StatelessWidget {
     child: Text(message, style: AppTextStyles.bodySecondary),
   );
 }
+
+
+

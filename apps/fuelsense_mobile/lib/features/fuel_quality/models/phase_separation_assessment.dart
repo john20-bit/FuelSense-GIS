@@ -36,7 +36,6 @@ class PhaseSeparationAssessment {
   final double? fuelAgeDays;
   final double? storageTemperatureC;
   final double? humidityPercent;
-  final bool? waterExposure;
   final bool? sealedStorage;
   final double riskScore;
   final String riskLevel;
@@ -58,7 +57,6 @@ class PhaseSeparationAssessment {
     required this.fuelAgeDays,
     required this.storageTemperatureC,
     required this.humidityPercent,
-    required this.waterExposure,
     required this.sealedStorage,
     required this.riskScore,
     required this.riskLevel,
@@ -101,7 +99,6 @@ class PhaseSeparationAssessment {
       humidityPercent: json['humidity_percent'] is num
           ? (json['humidity_percent'] as num).toDouble()
           : null,
-      waterExposure: json['water_exposure'] as bool?,
       sealedStorage: json['sealed_storage'] as bool?,
       riskScore: json['risk_score'] is num
           ? (json['risk_score'] as num).toDouble()

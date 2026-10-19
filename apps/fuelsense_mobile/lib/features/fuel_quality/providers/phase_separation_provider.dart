@@ -28,7 +28,6 @@ class PhaseSeparationController {
     double? fuelAgeDays,
     double? storageTemperatureC,
     double? humidityPercent,
-    bool? waterExposure,
     bool? sealedStorage,
   }) {
     return _repository.analyze(
@@ -39,7 +38,6 @@ class PhaseSeparationController {
       fuelAgeDays: fuelAgeDays,
       storageTemperatureC: storageTemperatureC,
       humidityPercent: humidityPercent,
-      waterExposure: waterExposure,
       sealedStorage: sealedStorage,
     );
   }

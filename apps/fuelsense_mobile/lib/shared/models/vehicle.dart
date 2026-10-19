@@ -19,6 +19,11 @@ class Vehicle {
   final bool? e20Compatible;
   final bool? e85Compatible;
 
+  // Optional attachments for manually entered or catalog vehicles.
+  final String? vehicleImageUrl;
+  final String? registrationCertificateUrl;
+  final bool isManuallyEntered;
+
   const Vehicle({
     required this.id,
     this.documentId,
@@ -37,21 +42,22 @@ class Vehicle {
     this.modelYear,
     this.e20Compatible,
     this.e85Compatible,
+    this.vehicleImageUrl,
+    this.registrationCertificateUrl,
+    this.isManuallyEntered = false,
   });
 
   factory Vehicle.fromJson(Map<String, dynamic> json) {
-    dynamic value(String snake, String camel) {
-      return json[snake] ?? json[camel];
-    }
+    dynamic value(String snake, String camel) => json[snake] ?? json[camel];
 
     double number(String snake, String camel) {
-      final value = json[snake] ?? json[camel];
-      return value is num ? value.toDouble() : 0.0;
+      final v = json[snake] ?? json[camel];
+      return v is num ? v.toDouble() : 0.0;
     }
 
     int? integer(String snake, String camel) {
-      final value = json[snake] ?? json[camel];
-      return value is num ? value.toInt() : null;
+      final v = json[snake] ?? json[camel];
+      return v is num ? v.toInt() : null;
     }
 
     return Vehicle(
@@ -59,34 +65,31 @@ class Vehicle {
       documentId:
           json['document_id']?.toString() ?? json['documentId']?.toString(),
       name: json['name']?.toString() ?? 'Unknown Vehicle',
-
       registrationNumber:
           value('registration_number', 'registrationNumber')?.toString() ?? '',
-
       fuelType: value('fuel_type', 'fuelType')?.toString() ?? 'Unknown',
-
       powertrainType: value('powertrain_type', 'powertrainType')?.toString(),
-
       tankCapacity: number('fuel_capacity', 'tankCapacity'),
-
       currentMileage: number('current_mileage', 'currentMileage'),
       currentOdometer: number('current_odometer', 'currentOdometer'),
-
       currentFuelLevel: number('current_fuel', 'currentFuelLevel'),
-
       catalogId: integer('catalog_id', 'catalogId'),
-
       make: value('brand', 'make')?.toString(),
-
       model: json['model']?.toString(),
-
       variant: json['variant']?.toString(),
-
       modelYear: integer('model_year', 'modelYear'),
-
       e20Compatible: value('e20_compatible', 'e20Compatible') as bool?,
-
       e85Compatible: value('e85_compatible', 'e85Compatible') as bool?,
+      vehicleImageUrl: value(
+        'vehicle_image_url',
+        'vehicleImageUrl',
+      )?.toString(),
+      registrationCertificateUrl: value(
+        'registration_certificate_url',
+        'registrationCertificateUrl',
+      )?.toString(),
+      isManuallyEntered:
+          value('is_manually_entered', 'isManuallyEntered') == true,
     );
   }
 
@@ -113,31 +116,16 @@ class Vehicle {
 
   String get energyUnit => '%';
 
-  String get efficiencyLabel {
-    return currentMileage > 0
-        ? '${currentMileage.toStringAsFixed(1)} km/L'
-        : '--';
-  }
+  String get efficiencyLabel =>
+      currentMileage > 0 ? '${currentMileage.toStringAsFixed(1)} km/L' : '--';
 
   String get displayName {
-    final parts = <String>[];
+    final parts = <String>[
+      if (make != null && make!.trim().isNotEmpty) make!.trim(),
+      if (model != null && model!.trim().isNotEmpty) model!.trim(),
+      if (variant != null && variant!.trim().isNotEmpty) variant!.trim(),
+    ];
 
-    if (make != null && make!.trim().isNotEmpty) {
-      parts.add(make!.trim());
-    }
-
-    if (model != null && model!.trim().isNotEmpty) {
-      parts.add(model!.trim());
-    }
-
-    if (variant != null && variant!.trim().isNotEmpty) {
-      parts.add(variant!.trim());
-    }
-
-    if (parts.isNotEmpty) {
-      return parts.join(' ');
-    }
-
-    return name;
+    return parts.isNotEmpty ? parts.join(' ') : name;
   }
 }

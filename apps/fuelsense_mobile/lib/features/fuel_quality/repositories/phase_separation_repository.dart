@@ -14,7 +14,6 @@ class PhaseSeparationRepository {
     double? fuelAgeDays,
     double? storageTemperatureC,
     double? humidityPercent,
-    bool? waterExposure,
     bool? sealedStorage,
   }) async {
     final normalizedFuelType = fuelType.trim().toUpperCase();
@@ -23,9 +22,32 @@ class PhaseSeparationRepository {
       throw ArgumentError('Fuel type is required.');
     }
 
+    void validateRange(String name, double? value, double min, double max) {
+      if (value == null) return;
+      if (!value.isFinite || value < min || value > max) {
+        throw ArgumentError.value(
+          value,
+          name,
+          'Must be a finite value between $min and $max.',
+        );
+      }
+    }
+
+    if (normalizedFuelType == 'UNKNOWN') {
+      throw ArgumentError.value(
+        fuelType,
+        'fuelType',
+        'Select a known fuel type.',
+      );
+    }
+
+    validateRange('ethanolPercent', ethanolPercent, 0, 100);
+    validateRange('fuelAgeDays', fuelAgeDays, 0, 3650);
+    validateRange('storageTemperatureC', storageTemperatureC, -50, 100);
+    validateRange('humidityPercent', humidityPercent, 0, 100);
+
     final factors = <PhaseSeparationFactor>[];
     var riskScore = 0.0;
-    var availableInputs = 0;
 
     void addFactor({
       required String code,
@@ -52,9 +74,7 @@ class PhaseSeparationRepository {
     }
 
     if (ethanolPercent != null) {
-      availableInputs++;
-
-      final ethanol = ethanolPercent.clamp(0.0, 100.0);
+      final ethanol = ethanolPercent;
 
       if (ethanol >= 20.0) {
         addFactor(
@@ -78,9 +98,7 @@ class PhaseSeparationRepository {
     }
 
     if (fuelAgeDays != null) {
-      availableInputs++;
-
-      final age = fuelAgeDays.clamp(0.0, 3650.0);
+      final age = fuelAgeDays;
 
       if (age > 90.0) {
         addFactor(
@@ -104,9 +122,7 @@ class PhaseSeparationRepository {
     }
 
     if (storageTemperatureC != null) {
-      availableInputs++;
-
-      final temperature = storageTemperatureC.clamp(-50.0, 100.0);
+      final temperature = storageTemperatureC;
 
       if (temperature >= 35.0) {
         addFactor(
@@ -130,9 +146,7 @@ class PhaseSeparationRepository {
     }
 
     if (humidityPercent != null) {
-      availableInputs++;
-
-      final humidity = humidityPercent.clamp(0.0, 100.0);
+      final humidity = humidityPercent;
 
       if (humidity >= 80.0) {
         addFactor(
@@ -155,24 +169,7 @@ class PhaseSeparationRepository {
       }
     }
 
-    if (waterExposure == true) {
-      availableInputs++;
-
-      addFactor(
-        code: 'WATER_EXPOSURE',
-        label: 'Water exposure detected',
-        impact: 'CRITICAL',
-        points: 35.0,
-        detail:
-            'Known water exposure is the strongest direct risk indicator in this assessment.',
-      );
-    } else if (waterExposure == false) {
-      availableInputs++;
-    }
-
     if (sealedStorage == false) {
-      availableInputs++;
-
       addFactor(
         code: 'UNSEALED_STORAGE',
         label: 'Storage is not sealed',
@@ -181,13 +178,9 @@ class PhaseSeparationRepository {
         detail:
             'Unsealed storage increases the possibility of moisture entering the fuel system.',
       );
-    } else if (sealedStorage == true) {
-      availableInputs++;
-    }
+    } else if (sealedStorage == true) {}
 
     if (normalizedFuelType == 'E20' && ethanolPercent == null) {
-      availableInputs++;
-
       addFactor(
         code: 'E20_FUEL',
         label: 'E20 fuel',
@@ -206,10 +199,6 @@ class PhaseSeparationRepository {
       >= 20.0 => 'MODERATE',
       _ => 'LOW',
     };
-
-    final confidence = availableInputs == 0
-        ? 0.20
-        : (0.35 + (availableInputs / 6.0) * 0.60).clamp(0.0, 0.95);
 
     final recommendation = switch (riskLevel) {
       'CRITICAL' =>
@@ -238,11 +227,10 @@ class PhaseSeparationRepository {
       fuelAgeDays: fuelAgeDays,
       storageTemperatureC: storageTemperatureC,
       humidityPercent: humidityPercent,
-      waterExposure: waterExposure,
       sealedStorage: sealedStorage,
       riskScore: double.parse(riskScore.toStringAsFixed(1)),
       riskLevel: riskLevel,
-      confidence: double.parse(confidence.toStringAsFixed(2)),
+      confidence: 0,
       contributingFactors: factors,
       recommendation: recommendation,
       dataSource: 'FuelSense GIS deterministic domain rules',

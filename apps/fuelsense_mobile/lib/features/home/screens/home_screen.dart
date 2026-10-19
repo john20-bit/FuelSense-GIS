@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../services/fuel_price_service.dart';
 
 import '../../../core/design/app_theme_extension.dart';
 import '../../../features/news/widgets/news_feed.dart';
@@ -155,7 +156,7 @@ class _CommandHeader extends StatelessWidget {
         const SizedBox(height: 9),
 
         Text(
-          'News • Daily fuel prices • Station updates',
+          'News â€¢ Daily fuel prices â€¢ Station updates',
           style: TextStyle(color: theme.textSecondary, fontSize: 12),
         ),
       ],
@@ -167,15 +168,41 @@ class _CommandHeader extends StatelessWidget {
 // DAILY FUEL PRICES
 // -----------------------------------------------------------------------------
 
-class _DailyFuelPrices extends StatelessWidget {
+
+class _DailyFuelPrices extends StatefulWidget {
   const _DailyFuelPrices();
 
-  static final Uri _officialPricesUri = Uri.parse(
-    'https://iocl.com/petrol-diesel-price',
+  @override
+  State<_DailyFuelPrices> createState() => _DailyFuelPricesState();
+}
+
+class _DailyFuelPricesState extends State<_DailyFuelPrices> {
+  final FuelPriceService _service = FuelPriceService();
+  late Future<FuelPrices> _prices;
+
+  static final Uri _officialPricesUri = Uri(
+    scheme: 'https',
+    host: 'iocl.com',
+    path: '/petrol-diesel-price',
   );
 
+  @override
+  void initState() {
+    super.initState();
+    _prices = _service.fetchPrices('Chennai');
+  }
+
+  void _retry() {
+    setState(() {
+      _prices = _service.fetchPrices('Chennai');
+    });
+  }
+
   Future<void> _openOfficialPrices() async {
-    await launchUrl(_officialPricesUri, mode: LaunchMode.externalApplication);
+    await launchUrl(
+      _officialPricesUri,
+      mode: LaunchMode.externalApplication,
+    );
   }
 
   @override
@@ -205,22 +232,112 @@ class _DailyFuelPrices extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Prices are not currently verified in FuelSense.',
+          'Live fuel prices • API Mitra',
           style: TextStyle(color: theme.textMuted, fontSize: 11),
         ),
         const SizedBox(height: 14),
-        const Row(
-          children: [
-            Expanded(
-              child: _FuelPriceCard(title: 'PETROL', value: 'Unavailable'),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: _FuelPriceCard(title: 'DIESEL', value: 'Unavailable'),
-            ),
-          ],
+        FutureBuilder<FuelPrices>(
+          future: _prices,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Row(
+                children: [
+                  Expanded(
+                    child: _FuelPriceCard(
+                      title: 'PETROL',
+                      value: 'Loadingâ€¦',
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: _FuelPriceCard(
+                      title: 'DIESEL',
+                      value: 'Loadingâ€¦',
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            if (snapshot.hasError || !snapshot.hasData) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Expanded(
+                        child: _FuelPriceCard(
+                          title: 'PETROL',
+                          value: 'Unavailable',
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: _FuelPriceCard(
+                          title: 'DIESEL',
+                          value: 'Unavailable',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Could not load prices. Check your internet connection or API Mitra.',
+                    style: TextStyle(color: theme.textMuted, fontSize: 11),
+                  ),
+                  TextButton.icon(
+                    onPressed: _retry,
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('Try again'),
+                  ),
+                ],
+              );
+            }
+
+            final prices = snapshot.data!;
+            final updatedAt = prices.updatedAt;
+            final updatedLabel = updatedAt == null
+                ? 'Update time unavailable'
+                : 'Updated ${updatedAt.toLocal().toString().substring(0, 16)}';
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _FuelPriceCard(
+                        title: 'PETROL',
+                        value: 'â‚¹${prices.petrol.toStringAsFixed(2)}',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _FuelPriceCard(
+                        title: 'DIESEL',
+                        value: 'â‚¹${prices.diesel.toStringAsFixed(2)}',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  updatedLabel,
+                  style: TextStyle(color: theme.textMuted, fontSize: 10),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _retry,
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('Refresh prices'),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 4),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
@@ -275,7 +392,7 @@ class _FuelPriceCard extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            value.startsWith('₹') ? 'per litre' : 'Live lookup',
+            value.startsWith('â‚¹') ? 'per litre' : 'Live lookup',
             style: TextStyle(color: theme.textMuted, fontSize: 10),
           ),
         ],
@@ -293,7 +410,7 @@ class _Footer extends StatelessWidget {
 
     return Center(
       child: Text(
-        'F U E L S E N S E   •   SYSTEM READY',
+        'F U E L S E N S E   â€¢   SYSTEM READY',
         style: TextStyle(
           color: theme.textMuted.withValues(alpha: 0.65),
           fontSize: 8,
@@ -308,3 +425,4 @@ class _Footer extends StatelessWidget {
 // -----------------------------------------------------------------------------
 // MAP BACKGROUND PAINTER
 // -----------------------------------------------------------------------------
+

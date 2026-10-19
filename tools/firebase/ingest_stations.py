@@ -1,16 +1,25 @@
 import argparse
 import json
-import sys
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-
 PROJECT_ID = "fuelsense-ai-b3e97"
+COLLECTION_NAME = "stations"
+BATCH_SIZE = 400
+DAILY_TARGET = 18000
+EXCLUDED_IDS = {"494e71856670b5f2"}
+
+BASE_DIR = Path(__file__).resolve().parent
+MANIFEST = BASE_DIR / "stations-import-manifest.json"
+STATE_FILE = BASE_DIR / "stations-import-state.json"
+
 SHARDS_DIR = (
-    Path(__file__).resolve().parents[2]
+    BASE_DIR.parents[1]
     / "apps"
     / "fuelsense-backend-fastapi"
     / "services-go"
@@ -18,8 +27,6 @@ SHARDS_DIR = (
     / "india-fuel-pumps"
     / "shards"
 )
-
-BATCH_SIZE = 400
 
 
 def initialize_firestore():
@@ -30,30 +37,26 @@ def initialize_firestore():
         )
     else:
         app = firebase_admin.get_app()
-
     return firestore.client(app)
 
 
 def clean_optional(value: Any):
-    if value is None or value == "":
-        return None
-    return value
+    return None if value is None or value == "" else value
 
 
 def transform_outlet(outlet: dict[str, Any]) -> dict[str, Any]:
     products = []
-
     for product in outlet.get("products") or []:
-        products.append(
-            {
-                "name": str(product.get("name") or ""),
-                "priceInr": (
-                    float(product["priceInr"])
-                    if isinstance(product.get("priceInr"), (int, float))
-                    else None
-                ),
-            }
-        )
+        price = product.get("priceInr")
+        products.append({
+            "name": str(product.get("name") or ""),
+            "priceInr": (
+                float(price)
+                if isinstance(price, (int, float))
+                and not isinstance(price, bool)
+                else None
+            ),
+        })
 
     return {
         "schemaVersion": outlet.get("schemaVersion", 1),
@@ -78,22 +81,39 @@ def transform_outlet(outlet: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def read_shard(path: Path):
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+
+    if isinstance(data, list):
+        records = data
+    elif isinstance(data, dict):
+        records = data.get("outlets", data.get("data"))
+    else:
+        records = None
+
+    if not isinstance(records, list):
+        raise ValueError(f"Unexpected JSON structure in {path}")
+
+    for outlet in records:
+        if not isinstance(outlet, dict):
+            raise ValueError(f"Non-object station record in {path}")
+        yield outlet
+
+
 def validate_outlet(outlet: dict[str, Any], source: Path) -> str:
     station_id = str(outlet.get("stationId") or "").strip()
-
     if not station_id:
         raise ValueError(f"Missing stationId in {source}")
 
-    if "lat" not in outlet or "lng" not in outlet:
-        raise ValueError(f"Missing coordinates for {station_id} in {source}")
-
-    lat = outlet["lat"]
-    lng = outlet["lng"]
-
-    if not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
-        raise ValueError(f"Non-numeric coordinates for {station_id} in {source}")
-
-    if not -90 <= lat <= 90 or not -180 <= lng <= 180:
+    lat, lng = outlet.get("lat"), outlet.get("lng")
+    if (
+        isinstance(lat, bool) or isinstance(lng, bool)
+        or not isinstance(lat, (int, float))
+        or not isinstance(lng, (int, float))
+        or not -90 <= lat <= 90
+        or not -180 <= lng <= 180
+    ):
         raise ValueError(f"Invalid coordinates for {station_id} in {source}")
 
     if not str(outlet.get("name") or "").strip():
@@ -104,143 +124,189 @@ def validate_outlet(outlet: dict[str, Any], source: Path) -> str:
 
 def load_outlets():
     files = sorted(SHARDS_DIR.glob("*.json"))
-
     if not files:
         raise FileNotFoundError(f"No JSON shards found at {SHARDS_DIR}")
 
-    seen_ids: set[str] = set()
-    total = 0
+    seen = set()
+    records = []
+    excluded = 0
 
     for path in files:
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-
-        for outlet in data.get("outlets", []):
+        for outlet in read_shard(path):
             station_id = validate_outlet(outlet, path)
-
-            if station_id in seen_ids:
+            if station_id in seen:
                 raise ValueError(f"Duplicate stationId detected: {station_id}")
+            seen.add(station_id)
 
-            seen_ids.add(station_id)
-            total += 1
-
-            yield station_id, transform_outlet(outlet)
-
-    print(f"Validated {total:,} station records from {len(files)} shards.")
-    print(f"Unique station IDs: {len(seen_ids):,}")
-
-
-def dry_run():
-    count = 0
-    sample = None
-
-    for station_id, document in load_outlets():
-        count += 1
-
-        if sample is None:
-            sample = (station_id, document)
-
-    print()
-    print("DRY RUN: no Firestore writes performed.")
-    print(f"Records ready for ingestion: {count:,}")
-
-    if sample:
-        station_id, document = sample
-        print()
-        print("Sample Firestore document ID:")
-        print(station_id)
-        print()
-        print("Sample Firestore document:")
-        print(json.dumps(document, indent=2, ensure_ascii=False))
-
-
-def ingest(skip: int = 0, limit: int | None = None):
-
-    db = initialize_firestore()
-    collection = db.collection("stations")
-    batch = db.batch()
-    pending = 0
-    written = 0
-    processed = 0
-
-    try:
-        for index, (station_id, document) in enumerate(load_outlets()):
-            if index < skip:
+            if station_id in EXCLUDED_IDS:
+                excluded += 1
                 continue
-            if limit is not None and processed >= limit:
-                break
 
-            processed += 1
-            batch.set(collection.document(station_id), document, merge=True)
-            pending += 1
+            records.append({
+                "id": station_id,
+                "data": transform_outlet(outlet),
+            })
 
-            if pending >= BATCH_SIZE:
-                batch.commit()
-                written += pending
-                next_skip = skip + written
-                print(
-                    f"Committed {written:,} records "
-                    f"(source index {skip:,} -> {next_skip:,})."
-                )
-                batch = db.batch()
-                pending = 0
-
-        if pending:
-            batch.commit()
-            written += pending
-
-    except Exception as exc:
-        next_skip = skip + written
-        print()
-        print("Firestore ingestion stopped before completion.")
-        print(f"Successful commits in this run: {written:,}")
-        print(f"Next validated source index: {next_skip:,}")
-        print(
-            "Resume command: "
-            f"python3 tools/firebase/ingest_stations.py --write --skip {next_skip}"
+    if EXCLUDED_IDS - seen:
+        raise ValueError(
+            "Excluded station ID was not found in the source dataset: "
+            + ", ".join(sorted(EXCLUDED_IDS - seen))
         )
-        raise exc
 
-    print()
-    print(f"Firestore ingestion complete: {written:,} documents.")
+    print(f"Validated records: {len(seen):,}")
+    print(f"Source shards: {len(files):,}")
+    print(f"Excluded records: {excluded:,}")
+    print(f"Eligible source records: {len(records):,}")
+    return records
+
+
+def save_json_atomic(path: Path, payload):
+    temp = path.with_suffix(path.suffix + ".tmp")
+    with temp.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False)
+        handle.flush()
+        os.fsync(handle.fileno())
+    temp.replace(path)
+
+
+def prepare():
+    if MANIFEST.exists():
+        raise FileExistsError(
+            f"{MANIFEST} already exists. It was not overwritten."
+        )
+    if STATE_FILE.exists():
+        raise FileExistsError(
+            f"{STATE_FILE} already exists. It was not overwritten."
+        )
+
+    records = load_outlets()
+    db = initialize_firestore()
+
+    print("Reading existing Firestore station IDs...")
+    existing_ids = {
+        doc.id for doc in db.collection(COLLECTION_NAME).stream()
+    }
+
+    missing = [r for r in records if r["id"] not in existing_ids]
+
+    save_json_atomic(MANIFEST, missing)
+    save_json_atomic(STATE_FILE, {
+        "next_index": 0,
+        "completed": 0,
+        "created_batches": 0,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "last_write_date_utc": None,
+        "writes_today_utc": 0,
+    })
+
+    print("\nPREPARATION COMPLETE. No Firestore documents were changed.")
+    print(f"Existing IDs observed: {len(existing_ids):,}")
+    print(f"New documents in manifest: {len(missing):,}")
+    print(f"Manifest: {MANIFEST}")
+    print(f"Progress file: {STATE_FILE}")
+    print("Review these counts before authorizing any writes.")
+
+
+def load_json(path: Path):
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def write_daily():
+    if not MANIFEST.exists() or not STATE_FILE.exists():
+        raise FileNotFoundError(
+            "Manifest/progress files are missing. Run --prepare first."
+        )
+
+    records = load_json(MANIFEST)
+    state = load_json(STATE_FILE)
+    start = int(state["next_index"])
+
+    if start >= len(records):
+        print("All manifest records have already been processed.")
+        return
+
+    today_utc = datetime.now(timezone.utc).date().isoformat()
+    if state.get("last_write_date_utc") == today_utc:
+        raise RuntimeError(
+            "A write run has already occurred today (UTC). "
+            "Wait for the next UTC day before starting another run."
+        )
+
+    stop = min(start + DAILY_TARGET, len(records))
+    db = initialize_firestore()
+    collection = db.collection(COLLECTION_NAME)
+    created_this_run = 0
+
+    print(f"Manifest total: {len(records):,}")
+    print(f"Starting index: {start:,}")
+    print(f"Maximum planned creations this run: {stop - start:,}")
+    print("Existing documents will never be merged or overwritten.")
+
+    for offset in range(start, stop, BATCH_SIZE):
+        chunk = records[offset:min(offset + BATCH_SIZE, stop)]
+        batch = db.batch()
+
+        for record in chunk:
+            # create() uses an exists=false precondition. If an ID appeared
+            # after preparation, the batch fails instead of overwriting it.
+            batch.create(
+                collection.document(record["id"]),
+                record["data"],
+            )
+
+        # State advances only after Firestore confirms this whole batch.
+        batch.commit()
+
+        state["next_index"] = offset + len(chunk)
+        state["completed"] = state["next_index"]
+        state["created_batches"] = int(state["created_batches"]) + 1
+        state["last_write_date_utc"] = today_utc
+        state["writes_today_utc"] = created_this_run + len(chunk)
+        save_json_atomic(STATE_FILE, state)
+
+        created_this_run += len(chunk)
+        print(
+            f"Confirmed this run: {created_this_run:,}; "
+            f"manifest progress: {state['next_index']:,}/{len(records):,}"
+        )
+
+    print(f"\nRun finished. Confirmed new documents: {created_this_run:,}")
+    print(f"Remaining in manifest: {len(records) - state['next_index']:,}")
+    print("Check Firebase Usage before proceeding on another quota day.")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Ingest FuelSense GIS fuel stations into Firestore."
+        description="Safely prepare and incrementally ingest station records."
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate source data without Firestore writes.",
+    )
+    mode.add_argument(
+        "--prepare",
+        action="store_true",
+        help="Read Firestore IDs and create a local manifest; no writes.",
+    )
+    mode.add_argument(
         "--write",
         action="store_true",
-        help="Actually write station documents to Firestore.",
+        help="Create up to the daily target of missing documents.",
     )
-    parser.add_argument(
-        "--skip",
-        type=int,
-        default=0,
-        help="Skip this many validated records before writing.",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Write at most this many records after the skipped records.",
-    )
-
     args = parser.parse_args()
 
-    if args.skip < 0:
-        parser.error("--skip cannot be negative")
-
-    if args.write:
-        ingest(skip=args.skip, limit=args.limit)
-    else:
-        dry_run()
+    if args.dry_run:
+        records = load_outlets()
+        print("\nDRY RUN: no Firestore writes performed.")
+        print(f"Eligible records: {len(records):,}")
+    elif args.prepare:
+        prepare()
+    elif args.write:
+        write_daily()
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        raise
+    main()

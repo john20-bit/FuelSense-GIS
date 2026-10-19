@@ -1,92 +1,109 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 
 import '../../../shared/models/vehicle_catalog.dart';
 
 class VehicleCatalogRepository {
   VehicleCatalogRepository._();
 
-  static final VehicleCatalogRepository instance = VehicleCatalogRepository._();
+  static final VehicleCatalogRepository instance =
+      VehicleCatalogRepository._();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  CollectionReference<Map<String, dynamic>> get _catalog =>
-      _firestore.collection('vehicleCatalog');
+  static const String _baseUrl = String.fromEnvironment(
+    'FUELSENSE_API_URL',
+    defaultValue: 'http://10.0.2.2:8080/api',
+  );
 
   Future<List<VehicleCatalog>> getCatalog({
     String? fuelType,
     String? make,
     String? model,
   }) async {
-    Query<Map<String, dynamic>> query = _catalog;
+    final uri = Uri.parse('$_baseUrl/vehicles/catalog').replace(
+      queryParameters: {'limit': '100'},
+    );
 
-    final normalizedFuel = fuelType?.trim().toUpperCase();
-    final normalizedMake = make?.trim().toLowerCase();
-    final normalizedModel = model?.trim().toLowerCase();
+    final response = await http.get(
+      uri,
+      headers: {'Accept': 'application/json'},
+    ).timeout(const Duration(seconds: 15));
 
-    if (normalizedFuel != null && normalizedFuel.isNotEmpty) {
-      query = query.where('fuelType', isEqualTo: normalizedFuel);
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Vehicle catalogue request failed (${response.statusCode})',
+      );
     }
 
-    final snapshot = await query.get();
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final rows = decoded['results'] as List<dynamic>? ?? [];
+
+    final normalizedMake = make?.trim().toLowerCase() ?? '';
+    final normalizedModel = model?.trim().toLowerCase() ?? '';
+    final normalizedFuel = fuelType?.trim().toUpperCase() ?? '';
 
     final vehicles = <VehicleCatalog>[];
 
-    for (final document in snapshot.docs) {
-      final data = Map<String, dynamic>.from(document.data());
+    for (final row in rows) {
+      if (row is! Map<String, dynamic>) continue;
 
-      final catalog = VehicleCatalog.fromJson({
-        ...data,
-        'id': data['id'] ?? document.id,
-      });
+      final rawId = row['id']?.toString() ?? '';
+      final numericId = int.tryParse(rawId.split('-').last) ?? 0;
+      final vehicleMake = row['make']?.toString() ?? '';
+      final vehicleModel = row['model']?.toString() ?? '';
 
-      if (catalog.make.isEmpty || catalog.model.isEmpty) {
+      if (vehicleMake.isEmpty || vehicleModel.isEmpty) continue;
+
+      // The source catalogue contains names, not verified fuel specifications.
+      const fuelLabel = 'UNKNOWN';
+
+      if (normalizedMake.isNotEmpty &&
+          !vehicleMake.toLowerCase().contains(normalizedMake)) {
         continue;
       }
 
-      if (normalizedMake != null &&
-          normalizedMake.isNotEmpty &&
-          !catalog.make.toLowerCase().contains(normalizedMake)) {
+      if (normalizedModel.isNotEmpty &&
+          !vehicleModel.toLowerCase().contains(normalizedModel)) {
         continue;
       }
 
-      if (normalizedModel != null &&
-          normalizedModel.isNotEmpty &&
-          !catalog.model.toLowerCase().contains(normalizedModel)) {
+      if (normalizedFuel.isNotEmpty && normalizedFuel != fuelLabel) {
         continue;
       }
 
-      vehicles.add(catalog);
+      vehicles.add(
+        VehicleCatalog(
+          id: numericId,
+          make: vehicleMake,
+          model: vehicleModel,
+          modelYear: row['catalogYear'] is num
+              ? (row['catalogYear'] as num).toInt()
+              : null,
+          market: row['market']?.toString(),
+          country: row['country']?.toString(),
+          fuelType: fuelLabel,
+          sourceName: row['sourceName']?.toString(),
+          sourceUrl: row['sourceUrl']?.toString(),
+          verifiedAt: row['retrievedAt']?.toString(),
+        ),
+      );
     }
 
     vehicles.sort((a, b) {
-      final makeCompare = a.make.toLowerCase().compareTo(b.make.toLowerCase());
+      final makeCompare =
+          a.make.toLowerCase().compareTo(b.make.toLowerCase());
       if (makeCompare != 0) return makeCompare;
-
-      final modelCompare = a.model.toLowerCase().compareTo(
-        b.model.toLowerCase(),
-      );
-      if (modelCompare != 0) return modelCompare;
-
-      final yearCompare = (b.modelYear ?? 0).compareTo(a.modelYear ?? 0);
-      if (yearCompare != 0) return yearCompare;
-
-      return (a.variant ?? '').toLowerCase().compareTo(
-        (b.variant ?? '').toLowerCase(),
-      );
+      return a.model.toLowerCase().compareTo(b.model.toLowerCase());
     });
 
     return vehicles;
   }
 
   Future<VehicleCatalog?> getCatalogEntry(String documentId) async {
-    final snapshot = await _catalog.doc(documentId).get();
-
-    if (!snapshot.exists || snapshot.data() == null) {
-      return null;
+    final entries = await getCatalog();
+    for (final entry in entries) {
+      if (entry.id.toString() == documentId) return entry;
     }
-
-    final data = Map<String, dynamic>.from(snapshot.data()!);
-
-    return VehicleCatalog.fromJson({...data, 'id': data['id'] ?? snapshot.id});
+    return null;
   }
 }

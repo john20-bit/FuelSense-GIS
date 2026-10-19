@@ -24,6 +24,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final MapController _mapController = MapController();
 
   Timer? _debounceTimer;
+  StreamSubscription<Position>? _positionSubscription;
 
   LatLng? _mapCenter;
   Position? _userPosition;
@@ -94,6 +95,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       await _fetchStations(position.latitude, position.longitude);
 
       _focusInitialStation();
+      _startLiveLocationTracking();
     } catch (e) {
       debugPrint('FuelSense Map initialization failed: $e');
 
@@ -180,6 +182,34 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         debugPrint('FuelSense Map station focus failed: $e');
       }
     });
+  }
+
+  void _startLiveLocationTracking() {
+    _positionSubscription?.cancel();
+
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    ).listen(
+      (position) {
+        if (!mounted ||
+            !_isValidCoordinate(
+              position.latitude,
+              position.longitude,
+            )) {
+          return;
+        }
+
+        setState(() {
+          _userPosition = position;
+        });
+      },
+      onError: (Object error) {
+        debugPrint('FuelSense live GPS tracking failed: $error');
+      },
+    );
   }
 
   void _onMapEvent(MapEvent event) {
@@ -331,6 +361,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _positionSubscription?.cancel();
     _mapController.dispose();
     super.dispose();
   }

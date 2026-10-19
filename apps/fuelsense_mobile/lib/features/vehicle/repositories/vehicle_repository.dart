@@ -36,7 +36,7 @@ class VehicleRepository {
   }
 
   Future<Vehicle> createVehicle({
-    required int catalogId,
+    int? catalogId,
     required String name,
     required String registrationNumber,
     required String fuelType,
@@ -55,6 +55,9 @@ class VehicleRepository {
     String? verifiedAt,
     double? currentFuel,
     double? currentOdometer,
+    String? vehicleImageUrl,
+    String? registrationCertificateUrl,
+    bool isManuallyEntered = false,
   }) async {
     final vehicleReference = _vehicles.doc();
 
@@ -63,7 +66,7 @@ class VehicleRepository {
     }
 
     final data = <String, dynamic>{
-      'catalogId': catalogId,
+      ...?optionalField('catalogId', catalogId),
       'name': name.trim(),
       'registrationNumber': registrationNumber.trim().toUpperCase(),
       'fuelType': fuelType.trim().toUpperCase(),
@@ -82,6 +85,12 @@ class VehicleRepository {
       ...?optionalField('verifiedAt', verifiedAt),
       ...?optionalField('currentFuelLevel', currentFuel),
       ...?optionalField('currentOdometer', currentOdometer),
+      ...?optionalField('vehicleImageUrl', vehicleImageUrl),
+      ...?optionalField(
+        'registrationCertificateUrl',
+        registrationCertificateUrl,
+      ),
+      'isManuallyEntered': isManuallyEntered,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -124,6 +133,9 @@ class VehicleRepository {
     String? drivetrain,
     String? market,
     String? country,
+    String? vehicleImageUrl,
+    String? registrationCertificateUrl,
+    bool? isManuallyEntered,
   }) async {
     final data = <String, dynamic>{
       'name': name.trim(),
@@ -134,6 +146,16 @@ class VehicleRepository {
       'currentFuelLevel': currentFuel,
       'updatedAt': FieldValue.serverTimestamp(),
     };
+
+    if (vehicleImageUrl != null) {
+      data['vehicleImageUrl'] = vehicleImageUrl;
+    }
+    if (registrationCertificateUrl != null) {
+      data['registrationCertificateUrl'] = registrationCertificateUrl;
+    }
+    if (isManuallyEntered != null) {
+      data['isManuallyEntered'] = isManuallyEntered;
+    }
 
     if (replaceCatalog) {
       // Write nulls intentionally so the previous catalog's specifications
